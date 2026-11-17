@@ -1,5 +1,5 @@
 // Small command-line helper for the weekend run. Talks to Supabase with the service key.
-// Needs env SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY. No packages needed (Node 18+).
+// No packages needed (Node 18+). See the note on keys below.
 //
 //   node tools/db.mjs push-week <content.json> [--publish]   lessons + answer sheets (keeps the published status of existing lessons unless --publish)
 //   node tools/db.mjs seed-topics <topics.json>              adds topics that are missing, never overwrites
@@ -9,10 +9,17 @@
 //   node tools/db.mjs download <storage path> <out file>    a photo Hadi uploaded (bucket "work")
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 
-const URL_ = process.env.SUPABASE_URL;
+// The service key normally arrives as a network secret: the cloud proxy adds
+// "Authorization: Bearer <service key>" to requests for the Supabase host, so this
+// script never sees it. The public anon key (from docs/config.js) goes in the apikey header.
+// SUPABASE_SERVICE_ROLE_KEY in the environment also works, if set.
+const cfgText = readFileSync(new URL('../docs/config.js', import.meta.url), 'utf8');
+const URL_ = process.env.SUPABASE_URL || (cfgText.match(/supabaseUrl:\s*'([^']+)'/) || [])[1];
+const ANON = (cfgText.match(/supabaseAnonKey:\s*'([^']+)'/) || [])[1];
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!URL_ || !KEY) { console.error('Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY first.'); process.exit(1); }
-const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' };
+if (!URL_ || !(KEY || ANON)) { console.error('No Supabase URL or key found.'); process.exit(1); }
+const H = KEY ? { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' }
+  : { apikey: ANON, 'Content-Type': 'application/json' };
 
 async function rest(method, path, body, prefer) {
   const r = await fetch(`${URL_}/rest/v1/${path}`, { method, headers: { ...H, ...(prefer ? { Prefer: prefer } : {}) }, body: body ? JSON.stringify(body) : undefined });

@@ -1,7 +1,11 @@
 # Weekend run
 
-Instructions for the scheduled Claude session that runs every Saturday. It needs `SUPABASE_URL` and
-`SUPABASE_SERVICE_ROLE_KEY` in its environment, and the project folder `/mnt/project-files/`.
+Instructions for the scheduled Claude session that runs every Saturday. It needs the project folder
+`/mnt/project-files/` and admin access to Supabase. The service key is a network secret in the cloud
+environment (the proxy adds `Authorization: Bearer <key>` for the Supabase host), so `tools/db.mjs`
+needs no key of its own. Run it with `NODE_USE_ENV_PROXY=1` so Node's fetch goes through the proxy:
+`export NODE_USE_ENV_PROXY=1` once at the start. Quick check: `node tools/db.mjs get answer_sheets "select=lesson_id&limit=1"`
+must return a row; a 401 "permission denied" means the secret is missing.
 
 Read first: `/mnt/project-files/lessons/README.md` (lesson format and timetable),
 `/mnt/project-files/english-1en2/course-plan.md`, and project memory.
