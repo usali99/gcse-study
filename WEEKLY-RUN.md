@@ -50,10 +50,12 @@ Write next week's lessons in `/mnt/project-files/lessons/week-NN/` in the same f
 (Markdown lesson + `-answers.md` + `quizzes.json` for the self-marking memory quizzes). Follow the timetable
 (Mon English + Maths, Tue English + Chemistry, Wed English + Physics, Thu English, Fri English; English is the
 main focus until April 2027; no mocks unless Usman asks). Bring back anything Hadi got wrong in this week's
-memory quizzes and anything marked Weak. On the website, Hadi types answers or uploads photos, so the
+memory quizzes and anything marked Weak. Memory quizzes (from week 2, Usman agreed 18 Nov 2026): mostly the lesson's own
+subject (in English lessons 3-4 of 5 English, 1-2 from other subjects), and label every other-subject question,
+e.g. "(Maths recap) What is 10% of 70?". Answer sheets say "For the parent only" and name no internal files. On the website, Hadi types answers or uploads photos, so the
 "Send back" box is replaced automatically.
 
-Then build and upload as a draft (Usman approves it on the Lessons page):
+Then build and upload as a draft (the parent, Rizwana, approves it on the Lessons page):
 
 ```
 node tools/build-content.mjs /mnt/project-files/lessons/week-NN NN <monday YYYY-MM-DD> /mnt/project-files/website/content/week-NN.json
