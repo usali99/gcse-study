@@ -288,6 +288,9 @@ create policy v2_courses_edit on public.courses for update using (public.v2_can_
 drop policy if exists v2_courses_remove on public.courses;
 create policy v2_courses_remove on public.courses for delete using (public.v2_can_manage_student(student_id));
 
+-- Supabase grants signed-in users full table rights by default: take them away first.
+revoke all on public.people, public.schools, public.school_members, public.classes, public.class_students,
+  public.guardianships, public.invites, public.courses from authenticated;
 grant select on public.people, public.schools, public.school_members, public.classes, public.class_students, public.guardianships to authenticated;
 grant update (full_name) on public.people to authenticated;
 grant update (name) on public.schools to authenticated;
