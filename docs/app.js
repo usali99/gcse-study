@@ -12,6 +12,9 @@
   const fmt = (iso, o) => new Date(iso + 'T12:00:00').toLocaleDateString('en-GB', o || { day: 'numeric', month: 'long', year: 'numeric' });
   const weeksUntil = (iso) => Math.max(0, Math.ceil((new Date(iso + 'T12:00:00') - new Date()) / (7 * 864e5)));
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2));
+  const CHILD_DOMAIN = 'ninegrade.co.uk';
+  const childEmail = (u) => `child-${u}@${CHILD_DOMAIN}`;
+  const childUser = (e) => { const m = /^child-([a-z0-9]{3,20})@ninegrade\.co\.uk$/.exec(e || ''); return m ? m[1] : null; };
   const newCode = () => { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; const r = crypto.getRandomValues(new Uint8Array(8)); return [...r].map((x) => a[x % a.length]).join(''); };
   const store = {
     get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
@@ -34,8 +37,9 @@
         return p ? { ...p, email: data.session.user.email } : { id: data.session.user.id, full_name: data.session.user.email, role: null, email: data.session.user.email };
       },
       async signIn(email, password) {
-        const { error } = await sb.auth.signInWithPassword({ email, password });
-        if (error) throw new Error(/Invalid login/.test(error.message) ? 'That email and password do not match.' : /confirm/i.test(error.message) ? 'Please confirm your email first: check your inbox for the link.' : error.message);
+        const isUser = !email.includes('@');
+        const { error } = await sb.auth.signInWithPassword({ email: isUser ? childEmail(email.toLowerCase()) : email, password });
+        if (error) throw new Error(/Invalid login/.test(error.message) ? (isUser ? 'That username and password do not match.' : 'That email and password do not match.') : /confirm/i.test(error.message) ? 'Please confirm your email first: check your inbox for the link.' : error.message);
       },
       async signUp({ email, password, full_name, invite_code, school_name }) {
         const { data, error } = await sb.auth.signUp({ email, password, options: { data: { v2: true, full_name, invite_code, school_name }, emailRedirectTo: location.href.split('#')[0] } });
@@ -54,12 +58,24 @@
         ]);
         let requests = []; let feedback = [];
         const { data: ses } = await sb.auth.getSession(); if (people.some((x) => x.is_platform_admin && ses.session && x.id === ses.session.user.id)) { try { requests = await all('invite_requests', (q) => q.order('created_at', { ascending: false })); } catch (e) { requests = []; } try { feedback = await all('feedback', (q) => q.order('created_at', { ascending: false })); } catch (e) { feedback = []; } }
-        return { people, schools, members, classes, classStudents, guardianships, courses, invites, requests, feedback };
+        let usernames = []; if (guardianships.some((g) => ses.session && g.parent_id === ses.session.user.id)) { const u = await sb.rpc('v2_child_usernames'); usernames = u.error ? [] : u.data; }
+        return { people, schools, members, classes, classStudents, guardianships, courses, invites, requests, feedback, usernames };
       },
       async addCourse(c) { must(await sb.from('courses').insert(c)); },
       async updateCourse(id, patch) { const r = await sb.from('courses').update(patch).eq('id', id); if (r.error) throw new Error(/study_days/.test(r.error.message) ? 'Study days need a quick database update first. Ask the site owner to run v2-timetable.sql.' : r.error.message); },
       async deleteCourse(id) { must(await sb.from('courses').delete().eq('id', id)); },
       async addInvite(i) { must(await sb.from('invites').insert(i)); },
+      async createChild({ full_name, username, password, parent_id }) {
+        const code = newCode();
+        must(await sb.from('invites').insert({ code, role: 'student', parent_id, max_uses: 1, note: 'Login for ' + full_name.slice(0, 60), expires_at: new Date(Date.now() + 864e5).toISOString() }));
+        // A separate client, so creating the child doesn't sign the parent out.
+        const tmp = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'gcse-child-signup' } });
+        const { error } = await tmp.auth.signUp({ email: childEmail(username), password, options: { data: { v2: true, full_name, invite_code: code } } });
+        await tmp.auth.signOut({ scope: 'local' }).catch(() => {});
+        if (error) { await sb.from('invites').delete().eq('code', code); throw new Error(/already|registered|exists/i.test(error.message) ? 'That username is taken. Try another one.' : /password/i.test(error.message) ? error.message : 'That login could not be created: ' + error.message); }
+      },
+      async childUsernames() { const r = await sb.rpc('v2_child_usernames'); return r.error ? [] : r.data; },
+      async setChildPassword(child, new_password) { const r = await sb.rpc('v2_set_child_password', { child, new_password }); if (r.error) throw new Error(/does not exist|schema cache/.test(r.error.message) ? 'This needs a quick database update first (v2-child-logins.sql).' : r.error.message); },
       async deleteInvite(code) { must(await sb.from('invites').delete().eq('code', code)); },
       async addClass(c) { must(await sb.from('classes').insert(c)); },
       async requestInvite(r) { const { error } = await sb.from('invite_requests').insert(r); if (error) throw new Error(/already have a request|Too many/.test(error.message) ? error.message : /does not exist|schema cache/.test(error.message) ? 'Requests are not switched on yet. Please try again later.' : 'Something went wrong. Please check your details and try again.'); },
@@ -110,7 +126,7 @@
     return {
       demo: true,
       reset() { S = seed(); save(); },
-      accounts: () => S.people.filter((p) => ['usman', 'hadi', 'head', 'teacher', 'sam'].includes(p.id)),
+      accounts: () => S.people.filter((p) => ['usman', 'hadi', 'head', 'teacher', 'sam'].includes(p.id) || childUser(p.email)),
       async me() { return me(); },
       async signIn(id) { meId = id; store.set(KEY + '-me', id); },
       async signUp({ email, full_name, invite_code, school_name }) {
@@ -145,11 +161,17 @@
           invites: S.invites.filter((i) => i.created_by === m.id || m.is_platform_admin),
           requests: m.is_platform_admin ? (S.requests || []) : [],
           feedback: m.is_platform_admin ? (S.feedback || []) : [],
+          usernames: S.guardianships.filter((g) => g.parent_id === m.id).map((g) => ({ id: g.student_id, username: childUser((S.people.find((p) => p.id === g.student_id) || {}).email) })).filter((x) => x.username),
         };
       },
       async updateCourse(id, patch) { const c = S.courses.find((x) => x.id === id); if (!c || !canManage(c.student_id)) throw new Error('You can only change courses for your own students.'); Object.assign(c, patch); save(); },
       async addCourse(c) { if (!canManage(c.student_id)) throw new Error('You can only plan courses for your own students.'); S.courses.push({ ...c, id: uid(), created_at: new Date().toISOString() }); save(); },
       async deleteCourse(id) { S.courses = S.courses.filter((c) => c.id !== id); save(); },
+      async createChild({ full_name, username, parent_id }) {
+        if (S.people.some((p) => p.email === childEmail(username))) throw new Error('That username is taken. Try another one.');
+        const id = uid(); S.people.push({ id, full_name, role: 'student', is_platform_admin: false, email: childEmail(username) }); S.guardianships.push({ parent_id, student_id: id }); save();
+      },
+      async setChildPassword() { },
       async addInvite(i) { S.invites.unshift({ ...i, uses: 0, created_by: meId, created_at: new Date().toISOString() }); save(); },
       async deleteInvite(code) { S.invites = S.invites.filter((i) => i.code !== code); save(); },
       async addClass(c) { S.classes.push({ ...c, id: uid() }); save(); },
@@ -326,7 +348,7 @@
           <div class="acct-list">${api.accounts().map((p) => `<button class="acct" data-acct="${p.id}"><span class="avatar">${esc(initials(p.full_name))}</span><span><b>${esc(p.full_name)}</b><small>${ROLE[p.role]}${p.is_platform_admin ? ' and owner' : ''}${p.id === 'hadi' ? ', managed by a parent' : p.id === 'sam' ? ', studying on their own' : ''}</small></span></button>`).join('')}</div>
           <button class="btn ghost sm" id="reset">Reset the preview</button>` : `
           <form id="f" class="form">
-            <label for="email">Email<input id="email" type="email" autocomplete="username" required></label>
+            <label for="email">Email or username<input id="email" type="text" inputmode="email" autocapitalize="none" spellcheck="false" autocomplete="username" required></label>
             <label for="pw">Password<input id="pw" type="password" autocomplete="current-password" required></label>
             ${err ? `<p class="msg err">${esc(err)}</p>` : ''}
             <button class="btn primary lg" id="go">Sign in</button>
@@ -672,7 +694,8 @@
   function childCard(ch) {
     const cs = coursesOf(ch.id);
     const studyHere = study.role === 'admin' && ch.id === (study.studentId() || childrenOf(me.id)[0].id);
-    return `<article class="person-card"><div class="pc-head"><span class="avatar lg">${esc(initials(ch.full_name))}</span><div><h3>${esc(ch.full_name)}</h3><span class="muted small">${cs.length} course${cs.length === 1 ? '' : 's'}</span></div><div class="row"><a class="btn ghost sm" href="#timetable-${esc(ch.id)}">Weekly timetable</a><a class="btn primary sm" href="#plan-for-${esc(ch.id)}">Add a course</a></div></div>
+    const uname = ((D.usernames || []).find((u) => u.id === ch.id) || {}).username;
+    return `<article class="person-card"><div class="pc-head"><span class="avatar lg">${esc(initials(ch.full_name))}</span><div><h3>${esc(ch.full_name)}</h3><span class="muted small">${cs.length} course${cs.length === 1 ? '' : 's'}${uname ? ` · signs in as <b>${esc(uname)}</b> · <button type="button" class="linkish" data-reset-child="${esc(ch.id)}">Set a new password</button>` : ''}</span></div><div class="row"><a class="btn ghost sm" href="#timetable-${esc(ch.id)}">Weekly timetable</a><a class="btn primary sm" href="#plan-for-${esc(ch.id)}">Add a course</a></div></div><div class="reset-slot" id="reset-${esc(ch.id)}"></div>
       ${studyHere ? study.dashBlock() : ''}${overview(cs)}
       ${cs.length ? `<div class="course-grid">${cs.map((c) => courseCard(c)).join('')}</div>` : '<p class="muted small">No courses yet.</p>'}</article>`;
   }
@@ -699,11 +722,41 @@
       ${study.role === 'admin' ? `<section class="panel"><div class="panel-head"><h2>${st ? esc(st.full_name) + "'s study" : 'Study'}</h2></div>${study.dashBlock()}</section>` : ''}
       <section class="panel slim"><div class="panel-head"><div><h2>Everyone</h2><p class="muted small">${D.people.length} accounts, ${D.courses.length} course plans.</p></div><a class="btn ghost sm" href="#everyone">See everyone</a></div></section>`));
   }
+  function addChildPage(done) {
+    shell('home', page(`<div class="narrow"><div class="page-head"><a class="small" href="#home">← Dashboard</a><p class="kicker dark">Your family</p><h1>Add a child</h1></div>
+      ${done ? `<section class="panel"><h2>${esc(done.name)} can sign in now</h2><p>On <b>${esc(location.host || 'the site')}</b>, press Sign in and enter:</p>
+        <dl class="summary"><dt>Username</dt><dd><b>${esc(done.username)}</b></dd><dt>Password</dt><dd>the one you just chose</dd></dl>
+        <p class="muted small">Write these down somewhere safe. If they forget the password, use "Set a new password" on their card.</p><div class="row"><a class="btn primary" href="#plan-for-${esc(done.id || '')}">Add their first course</a><a class="btn ghost" href="#home">Back to dashboard</a></div></section>` : ''}
+      <section class="panel"><h2>Create a login for your child</h2><p class="muted">No email needed. Your child signs in with a username and password that you choose here.</p>
+        <form id="kid" class="form">
+          <label for="k-name">Child's full name<input id="k-name" required maxlength="80" autocomplete="off"></label>
+          <label for="k-user">Username <small>3 to 20 lowercase letters or numbers, e.g. sami2028</small><input id="k-user" required minlength="3" maxlength="20" pattern="[a-z0-9]{3,20}" autocapitalize="none" spellcheck="false" autocomplete="off"></label>
+          <label for="k-pw">Password <small>at least 8 characters</small><input id="k-pw" type="text" minlength="8" required autocomplete="off"></label>
+          <div id="k-msg"></div><button class="btn primary lg" id="k-go">Create login</button></form></section>
+      <section class="panel slim"><div class="panel-head"><div><h2>Or: your child has their own email</h2><p class="muted small">Make an invite code. They sign up with it using their email and are linked to you.</p></div><a class="btn ghost sm" href="#invites">Invite codes</a></div></section></div>`));
+    const u = document.getElementById('k-user'); u.oninput = () => { u.value = u.value.toLowerCase().replace(/[^a-z0-9]/g, ''); };
+    document.getElementById('kid').onsubmit = async (e) => {
+      e.preventDefault(); const b = document.getElementById('k-go'); const msg = document.getElementById('k-msg'); b.disabled = true; b.textContent = 'Creating…'; msg.innerHTML = '';
+      const full_name = document.getElementById('k-name').value.trim(); const username = u.value; const password = document.getElementById('k-pw').value;
+      try { if (!/^[a-z0-9]{3,20}$/.test(username)) throw new Error('Use 3 to 20 lowercase letters or numbers for the username.');
+        await api.createChild({ full_name, username, password, parent_id: me.id }); await load();
+        const kid = childrenOf(me.id).find((k) => k.full_name === full_name); addChildPage({ name: full_name, username, id: kid && kid.id }); }
+      catch (x) { b.disabled = false; b.textContent = 'Create login'; msg.innerHTML = `<p class="msg err">${esc(x.message)}</p>`; }
+    };
+  }
   function parentHome() {
     const kids = childrenOf(me.id);
     shell('home', page(`${head(kids.length ? `You manage ${kids.length} ${kids.length === 1 ? 'child' : 'children'}.` : '')}
-      ${kids.map(childCard).join('') || '<section class="panel"><div class="empty"><b>Add your child</b><span>Make a code on the Invite codes page. Your child signs up with it and appears here.</span><a class="btn primary sm" href="#invites">Make a code</a></div></section>'}
-      ${kids.length ? `<section class="panel slim"><div class="panel-head"><div><h2>Add another child</h2><p class="muted small">Make a code for them to sign up with.</p></div><a class="btn ghost sm" href="#invites">Invite codes</a></div></section>` : ''}`));
+      ${kids.map(childCard).join('') || '<section class="panel"><div class="empty"><b>Add your child</b><span>Make a code on the Invite codes page. Your child signs up with it and appears here.</span><a class="btn primary sm" href="#add-child">Add your child</a></div></section>'}
+      ${kids.length ? `<section class="panel slim"><div class="panel-head"><div><h2>Add another child</h2><p class="muted small">Create a login for them, with or without an email.</p></div><a class="btn ghost sm" href="#add-child">Add a child</a></div></section>` : ''}`));
+    app.querySelectorAll('[data-reset-child]').forEach((b) => { b.onclick = () => {
+      const id = b.dataset.resetChild; const slot = document.getElementById('reset-' + id);
+      slot.innerHTML = `<form class="form-row row" id="rf-${esc(id)}"><label for="rp-${esc(id)}">New password <small>at least 8 characters</small><input id="rp-${esc(id)}" type="text" minlength="8" required autocomplete="off"></label><button class="btn primary sm">Save password</button><span class="out"></span></form>`;
+      const f = document.getElementById('rf-' + id); f.querySelector('input').focus();
+      f.onsubmit = async (e) => { e.preventDefault(); const out = f.querySelector('.out'); const btn = f.querySelector('button'); btn.disabled = true;
+        try { await api.setChildPassword(id, f.querySelector('input').value); out.innerHTML = '<span class="msg ok">Saved. Tell your child the new password.</span>'; f.querySelector('input').value = ''; }
+        catch (x) { out.innerHTML = `<span class="msg err">${esc(x.message)}</span>`; } btn.disabled = false; };
+    }; });
   }
   function teacherHome() {
     const mine = D.classes.filter((c) => c.teacher_id === me.id);
@@ -811,19 +864,20 @@
       ${o.recovery ? '<p class="msg ok">You\'re signed in from the reset link. Choose a new password below.</p>' : ''}
       <div class="account-grid">
         <section class="panel"><h2>Name</h2><form id="f-name" class="form"><label for="a-name">Full name<input id="a-name" required maxlength="80" autocomplete="name" value="${esc(me.full_name)}"></label><button class="btn primary">Save name</button><div class="out"></div></form></section>
-        <section class="panel"><h2>Email</h2><form id="f-email" class="form"><label for="a-email">Email address<input id="a-email" type="email" required autocomplete="email" value="${esc(me.email || '')}"></label>${api.demo ? '' : '<p class="muted small">We\'ll email a link to confirm the change. Your old email works until then.</p>'}<button class="btn primary">Change email</button><div class="out"></div></form></section>
+        ${childUser(me.email) ? `<section class="panel"><h2>Username</h2><p>You sign in with the username <b>${esc(childUser(me.email))}</b>.</p><p class="muted small">If you forget your password, your parent can set a new one from their dashboard.</p></section>` : `<section class="panel"><h2>Email</h2><form id="f-email" class="form"><label for="a-email">Email address<input id="a-email" type="email" required autocomplete="email" value="${esc(me.email || '')}"></label>${api.demo ? '' : '<p class="muted small">We\'ll email a link to confirm the change. Your old email works until then.</p>'}<button class="btn primary">Change email</button><div class="out"></div></form></section>`}
         <section class="panel" id="pw-panel"><h2>Password</h2><form id="f-pw" class="form"><label for="a-pw">New password <small>at least 8 characters</small><input id="a-pw" type="password" minlength="8" required autocomplete="new-password"></label><label for="a-pw2">Type it again<input id="a-pw2" type="password" minlength="8" required autocomplete="new-password"></label><button class="btn primary">Change password</button><div class="out"></div></form></section>
       </div>`));
     if (o.recovery) document.getElementById('a-pw').focus();
     const wire = (id, fn) => { const f = document.getElementById(id); f.onsubmit = async (e) => { e.preventDefault(); const b = f.querySelector('button'); const out = f.querySelector('.out'); b.disabled = true; out.innerHTML = '';
       try { const m = await fn(); out.innerHTML = `<p class="msg ok">${esc(m)}</p>`; } catch (x) { out.innerHTML = `<p class="msg err">${esc(x.message)}</p>`; } b.disabled = false; }; };
     wire('f-name', async () => { const n = document.getElementById('a-name').value.trim(); await api.updateName(me.id, n); me.full_name = n; const nm = app.querySelector('.me-name'); if (nm) nm.firstChild.textContent = n; return 'Name saved.'; });
-    wire('f-email', async () => { const e = document.getElementById('a-email').value.trim(); if (e === me.email) throw new Error('That is already your email.'); const r = await api.updateEmail(e); if (!r.needsConfirm) me.email = e; return r.needsConfirm ? `Check ${e} for a link to confirm the change.` : 'Email changed.'; });
+    if (document.getElementById('f-email')) wire('f-email', async () => { const e = document.getElementById('a-email').value.trim(); if (e === me.email) throw new Error('That is already your email.'); const r = await api.updateEmail(e); if (!r.needsConfirm) me.email = e; return r.needsConfirm ? `Check ${e} for a link to confirm the change.` : 'Email changed.'; });
     wire('f-pw', async () => { const a = document.getElementById('a-pw').value; if (a !== document.getElementById('a-pw2').value) throw new Error('The two passwords don\'t match.'); await api.updatePassword(a); document.getElementById('f-pw').reset(); return 'Password changed.'; });
   }
   function forgotView() {
     shell('signin', page(`<div class="auth"><div class="auth-card"><p class="kicker dark">Sign in help</p><h1>Reset your password</h1>
       <p class="muted">Enter your email and we'll send a link to choose a new password.</p>
+      <p class="note small">Signing in with a username? Ask your parent: they can set a new password for you from their dashboard.</p>
       <form id="f" class="form"><label for="email">Email<input id="email" type="email" required autocomplete="username"></label><button class="btn primary lg" id="go">Send reset link</button><div class="out"></div></form>
       <p class="small"><a href="#signin">Back to sign in</a></p></div></div>`));
     document.getElementById('f').onsubmit = async (e) => { e.preventDefault(); const b = document.getElementById('go'); const out = e.target.querySelector('.out'); b.disabled = true;
@@ -881,6 +935,7 @@
       if (route.startsWith('edit-')) return editCourse(route.slice(5));
       if (route.startsWith('timetable-')) return timetablePage(route.slice(10));
       if (route === 'invites') return invitesPage();
+      if (route === 'add-child' && me.role === 'parent') return addChildPage();
       if (route === 'account') return accountPage();
       if (route === 'everyone' && me.is_platform_admin) return everyonePage();
       if (route === 'feedback' && me.is_platform_admin) return feedbackPage();
