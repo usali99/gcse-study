@@ -194,9 +194,9 @@
     }
     const subView = (s, extra = '') => `<div class="sub"><div class="panel-head"><span class="muted small">Sent ${fmtWhen(s.created_at)}${s.minutes_taken != null ? ` · took ${s.minutes_taken} min` : ''}</span>
       ${s.mark != null ? `<span class="pill done">${s.mark} / ${s.mark_max}</span>` : '<span class="pill sent">Waiting for marking</span>'}</div>
-      ${s.answer_text ? `<div class="answer-text">${esc(s.answer_text)}</div>` : ''}
+      ${s.answer_text ? `<b class="small">${role === 'admin' ? "Hadi's answer" : "Your answer"}</b><div class="answer-text">${esc(s.answer_text)}</div>` : ''}
       ${(s.files || []).length ? `<div class="thumbs">${s.files.map((f) => `<a data-file="${esc(f)}" target="_blank" rel="noopener"><span class="file">Photo</span></a>`).join('')}</div>` : ''}
-      ${s.feedback ? `<div class="feedback"><b>Feedback</b>\n${esc(s.feedback)}</div>` : ''}${extra}</div>`;
+      ${s.feedback ? `<div class="feedback"><b>Feedback${role === 'admin' ? " for Hadi" : ""}</b>\n${esc(s.feedback)}</div>` : ''}${extra}</div>`;
     async function thumbs() {
       for (const a of app.querySelectorAll('[data-file]')) {
         try { const url = await api.fileUrl(a.dataset.file); a.href = url; a.innerHTML = /\.pdf($|\?)/i.test(a.dataset.file) ? '<span class="file">PDF</span>' : `<img src="${esc(url)}" alt="Photo of written work">`; }
