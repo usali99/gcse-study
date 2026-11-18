@@ -243,10 +243,10 @@
       <section class="band">
         <h2 class="section-title">Everything a GCSE year needs, in one place</h2>
         <div class="showcase">
-          <article class="show show-blue"><p class="show-k">Choose your subjects</p><p class="show-t">Pick the board and specification for each subject, and GCSE Study builds a week-by-week plan to the exam.</p>${illoSubjects()}</article>
-          <article class="show show-green"><p class="show-k">Follow your plan</p><p class="show-t">Each week shows what to study in every subject, with progress you can see building towards the exam.</p>${illoPlan()}</article>
-          <article class="show show-amber"><p class="show-k">Get marked feedback</p><p class="show-t">Written answers are marked mark-scheme style: where marks were gained, where they were lost, and how to fix it.</p>${illoFeedback()}</article>
-          <article class="show show-violet"><p class="show-k">Know where you stand</p><p class="show-t">Scores, weak topics and time spent by subject, shared with the parent or teacher who supports you.</p>${illoProgress()}</article>
+          <article class="show show-blue"><p class="show-k">Build your plan</p><p class="show-t">Pick the board and specification for each subject, and GCSE Study builds a week-by-week plan to the exam.</p>${illoSubjects()}</article>
+          <article class="show show-green"><p class="show-k">Study week by week</p><p class="show-t">Each week shows what to study in every subject, with progress you can see building towards the exam.</p>${illoPlan()}</article>
+          <article class="show show-amber"><p class="show-k">Marking you learn from</p><p class="show-t">Written answers are marked mark-scheme style: where marks were gained, where they were lost, and how to fix it.</p>${illoFeedback()}</article>
+          <article class="show show-violet"><p class="show-k">Progress, shared</p><p class="show-t">Scores, weak topics and time spent by subject, shared with the parent or teacher who supports you.</p>${illoProgress()}</article>
         </div>
       </section>
       <section class="band">

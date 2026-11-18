@@ -11,11 +11,11 @@
   ];
 
   const FIND = [
-    ['Your statement of entry', 'The most reliable source. When a school or exam centre enters a student, it gives them a statement listing each subject, the board and the codes.'],
-    ['Past papers, mocks and revision guides', 'The board\'s name and logo are on the front of every paper. A specification code such as 8300 or 1MA1 also tells you the board.'],
-    ['The school\'s online platform', 'Many schools list exam boards on their website, in course handbooks or on the homework platform.'],
-    ['The exams officer', 'Every school and exam centre has one, and they hold the entries for every student.'],
-    ['The subject teacher', 'They teach to one specification, so they can tell you straight away.'],
+    ['Ask the subject teacher', 'The quickest answer. Each class follows one specification, so the teacher knows the board and the code.'],
+    ['Look at a past paper or mock', 'The front cover names the board. A code like 8300 (AQA), 1MA1 (Edexcel) or J560 (OCR) gives it away too.'],
+    ['Check the school website', 'Curriculum or options pages often list the board for each subject.'],
+    ['Ask the exams officer', 'They make the entries, so they can confirm every subject at once.'],
+    ['Read the statement of entry', 'Sent before the exams, it lists each subject with its board and codes. It is the final word if anything disagrees.'],
   ];
 
   const PRIVATE = [
