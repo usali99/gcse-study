@@ -57,7 +57,7 @@
         { id: 'd3', week: 1, lesson_date: iso(0), slot: 'b', subject: 'maths', title: 'Percentages', minutes: 30, body_html: body('10% is one tenth. Find 10%, then build up.'), quiz, status: 'published' },
         { id: 'd4', week: 2, lesson_date: iso(6), slot: 'a', subject: 'english', title: 'Language analysis', minutes: 40, body_html: body('Technique, quote, effect.'), quiz, status: 'draft' }],
       sheets: { d1: '<h2>Answers</h2><p>Accept any four facts from lines 1 to 8.</p>', d2: '<h2>Answers</h2><p>Example answers.</p>', d3: '<h2>Answers</h2><p>1. 30 2. 45</p>', d4: '<h2>Answers</h2><p>Technique, quote, effect.</p>' },
-      attempts: [{ lesson_id: 'd1', score: 1, max: 2, answers: [], created_at: new Date().toISOString() }],
+      attempts: [{ lesson_id: 'd1', score: 1, max: 2, answers: [{ given: 1, right: true }, { given: 'extrakt', right: false }], created_at: new Date().toISOString() }],
       subs: [{ id: 1, lesson_id: 'd1', answer_text: 'It is on the north coast of Kent. You travel by steamer...', files: [], minutes_taken: 6, created_at: new Date().toISOString(), mark: 9, mark_max: 9, feedback: 'Excellent work: full marks. Next time write four short numbered points.' }],
       topics: [{ id: 1, subject: 'english', skill: 'Finding information', paper_q: 'P1 Q1', status: 'Improving', evidence: '4/4 twice', sort: 1 }, { id: 2, subject: 'english', skill: 'Sentence control', paper_q: 'Writing', status: 'Weak', evidence: 'Run-on sentences', sort: 2 }, { id: 3, subject: 'maths', skill: 'Percentages', paper_q: 'P1', status: 'Not yet tested', evidence: '', sort: 1 }],
     });
@@ -204,6 +204,20 @@
       }
     }
 
+    function quizAnswers(l, a) {
+      const q = l.quiz || []; const ans = a.answers || [];
+      const right = (x) => (!x ? '' : x.type === 'mc' ? (x.options || [])[x.answer] : x.type === 'num' ? x.answer : (x.accept || [])[0]);
+      const shown = (x, g) => (g == null || g === '' ? '<span class="muted">(left blank)</span>' : esc(x && x.type === 'mc' ? (x.options || [])[g] : g));
+      return `<div class="qa"><div class="panel-head"><span class="muted small">Quiz ${fmtWhen(a.created_at)}</span><span class="pill ${a.score === a.max ? 'done' : 'todo'}">${a.score} / ${a.max}</span></div>
+        ${ans.length ? `<div class="scroll-x"><table class="data"><thead><tr><th>Question</th><th>Hadi's answer</th><th>Right answer</th></tr></thead><tbody>${ans.map((g, i) => `<tr><td>${esc((q[i] || {}).q || 'Question ' + (i + 1))}</td><td>${g.right ? '<span class="ok-t">✓</span>' : '<span class="err-t">✗</span>'} ${shown(q[i], g.given)}</td><td class="muted">${g.right ? '' : esc(right(q[i]))}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted small">Answers for this attempt weren\'t saved.</p>'}</div>`;
+    }
+    function hadiWork(l) {
+      const at = D.attempts.filter((a) => a.lesson_id === l.id); const subs = D.subs.filter((s) => s.lesson_id === l.id);
+      return `<section class="panel" id="work"><h2>Hadi's work</h2>
+        ${!at.length && !subs.length ? '<p class="muted">Nothing done for this lesson yet.</p>' : ''}
+        ${at.length ? `<h3>Memory quiz</h3>${at.map((a) => quizAnswers(l, a)).join('')}` : ''}
+        ${subs.length ? `<h3 style="margin-top:14px">Work he sent</h3>${subs.map((x) => subView(x, x.mark == null ? '<a class="btn primary sm" href="#marking">Mark it</a>' : '')).join('')}` : ''}</section>`;
+    }
     async function lessonView(id) {
       const l = D.byId[id]; const admin = role === 'admin';
       if (!l) return shell('home', page('<section class="panel"><h1>Lesson not found</h1><p><a href="#home">Back to your dashboard</a></p></section>'));
@@ -211,7 +225,7 @@
       shell(admin ? 'lessons' : 'today', page(`<div class="narrow"><div class="page-head"><a class="small" href="${admin ? '#lessons' : '#today'}">← Back</a><p class="kicker dark"><span class="subj ${l.subject}">${SUBJECTS[l.subject] || ''}</span> · ${fmtDay(l.lesson_date)}</p><h1>${esc(l.title)}</h1></div>
         ${admin && l.status === 'draft' ? '<p class="msg warn">Draft: Hadi can\'t see this lesson until you approve its week on the Lessons page.</p>' : ''}
         <article class="lesson" id="lesson-body">${l.body_html}</article>
-        ${admin ? '<section class="lesson answers" id="answer-sheet"><p class="muted">Loading the answer sheet…</p></section>' : `
+        ${admin ? hadiWork(l) + '<section class="lesson answers" id="answer-sheet"><p class="muted">Loading the answer sheet…</p></section>' : `
         <section class="panel" id="send"><h2>Send your work</h2>${p.subs.map((s) => subView(s)).join('')}
           <p class="muted">${p.sent ? 'Want to add more? Send it below.' : 'Type your answers, or take photos of your page. Then press Send.'}</p>
           <form id="sendform" class="form">
@@ -227,7 +241,7 @@
           document.getElementById('quiz-score').textContent = `${r.score} / ${r.max}${r.score === r.max ? ' Brilliant!' : ''}`;
           if (!admin) { try { await api.addAttempt({ lesson_id: id, ...r }); D.attempts.unshift({ lesson_id: id, ...r, created_at: new Date().toISOString() }); } catch (x) { document.getElementById('quiz-score').textContent += ' (score not saved: ' + x.message + ')'; } } };
       }
-      if (admin) { const sheet = await api.answerSheet(id).catch(() => null); document.getElementById('answer-sheet').innerHTML = sheet || '<p class="muted">No answer sheet for this lesson.</p>'; return; }
+      if (admin) { thumbs(); const sheet = await api.answerSheet(id).catch(() => null); document.getElementById('answer-sheet').innerHTML = sheet || '<p class="muted">No answer sheet for this lesson.</p>'; return; }
       thumbs();
       document.getElementById('sendform').onsubmit = async (e) => {
         e.preventDefault(); const text = document.getElementById('answer').value.trim(); const files = [...document.getElementById('photos').files]; const msg = document.getElementById('send-msg');
@@ -269,7 +283,7 @@
       filter = filter || 'todo'; const list = D.subs.filter((s) => (filter === 'todo' ? s.mark == null : s.mark != null));
       shell('marking', page(`<div class="page-head"><p class="kicker dark">Hadi</p><h1>Marking</h1><p class="muted">Claude marks new work every weekday evening and at the Saturday run. You can also mark or change anything here, using the answer sheet.</p></div>
         <div class="row" style="margin-bottom:16px"><button class="btn ${filter === 'todo' ? 'primary' : 'ghost'} sm" data-filter="todo">To mark (${toMark()})</button><button class="btn ${filter === 'done' ? 'primary' : 'ghost'} sm" data-filter="done">Marked (${D.subs.length - toMark()})</button></div>
-        ${list.length ? list.map((s) => { const l = D.byId[s.lesson_id] || { title: s.lesson_id, subject: '' }; return `<section class="panel"><p class="kicker dark"><span class="subj ${l.subject}">${SUBJECTS[l.subject] || ''}</span></p><h2><a href="#lesson-${esc(s.lesson_id)}">${esc(l.title)}</a></h2>
+        ${list.length ? list.map((s) => { const l = D.byId[s.lesson_id] || { title: s.lesson_id, subject: '' }; return `<section class="panel"><p class="kicker dark"><span class="subj ${l.subject}">${SUBJECTS[l.subject] || ''}</span></p><h2><a href="#lesson-${esc(s.lesson_id)}">${esc(l.title)}</a></h2><p class="small"><a href="#lesson-${esc(s.lesson_id)}">Open the lesson to see his quiz answers and the full lesson</a></p>
           ${subView(s, `<details data-sheet="${esc(s.lesson_id)}" class="other"><summary>Show the answer sheet</summary><div class="lesson answers"><p class="muted">Loading…</p></div></details>
             <form class="mark-form" data-mark="${s.id}"><label for="m-${s.id}">Mark<input type="number" id="m-${s.id}" min="0" value="${s.mark ?? ''}" required></label><label for="mm-${s.id}">Out of<input type="number" id="mm-${s.id}" min="1" value="${s.mark_max ?? ''}" required></label>
             <label for="fb-${s.id}" class="grow">Feedback for Hadi<textarea id="fb-${s.id}" rows="3">${esc(s.feedback || '')}</textarea></label><button class="btn primary" type="submit">Save mark</button></form>`)}</section>`; }).join('')
