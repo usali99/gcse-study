@@ -225,7 +225,7 @@
       shell(admin ? 'lessons' : 'today', page(`<div class="narrow"><div class="page-head"><a class="small" href="${admin ? '#lessons' : '#today'}">← Back</a><p class="kicker dark"><span class="subj ${l.subject}">${SUBJECTS[l.subject] || ''}</span> · ${fmtDay(l.lesson_date)}</p><h1>${esc(l.title)}</h1></div>
         ${admin && l.status === 'draft' ? '<p class="msg warn">Draft: Hadi can\'t see this lesson until you approve its week on the Lessons page.</p>' : ''}
         <article class="lesson" id="lesson-body">${l.body_html}</article>
-        ${admin ? hadiWork(l) + '<section class="lesson answers" id="answer-sheet"><p class="muted">Loading the answer sheet…</p></section>' : `
+        ${admin ? hadiWork(l) + '<section class="panel"><details class="other"><summary>Answer sheet for this lesson (only parents see this)</summary><p class="muted small">The right answers and marking guide. Claude uses it to mark Hadi\'s work, and you can use it to check a mark.</p><div class="lesson answers" id="answer-sheet"><p class="muted">Loading the answer sheet…</p></div></details></section>' : `
         <section class="panel" id="send"><h2>Send your work</h2>${p.subs.map((s) => subView(s)).join('')}
           <p class="muted">${p.sent ? 'Want to add more? Send it below.' : 'Type your answers, or take photos of your page. Then press Send.'}</p>
           <form id="sendform" class="form">
