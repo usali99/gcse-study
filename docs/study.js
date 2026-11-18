@@ -83,7 +83,7 @@
 
   window.createStudy = function (ctx) {
     // ctx: { sb, demo, getMeId, shell, page, esc, today, ring, app }
-    const { shell, page, esc, today, app } = ctx;
+    const { shell, page, esc, today, app } = ctx; const report = ctx.report || (() => '');
     const api = ctx.demo ? demoData(ctx.getMeId) : supabaseData(ctx.sb);
     let role = null; let D = null; let checked = false;
 
@@ -164,10 +164,10 @@
       app.querySelectorAll('[data-week]').forEach((b) => { b.onclick = async () => { b.disabled = true; await api.setWeek(Number(b.dataset.week), b.dataset.to); await load(); lessonsView(); }; });
     }
 
-    function quizHtml(q) {
+    function quizHtml(q, l) {
       return `<form class="quiz" id="quiz" novalidate><div class="panel-head"><h3>Answer here</h3><span class="muted small">It marks itself when you press Check</span></div>
         <ol>${q.map((x, i) => `<li><div class="q">${esc(x.q)}</div>${x.type === 'mc' ? `<div class="opts" role="radiogroup">${x.options.map((o, j) => `<label><input type="radio" name="q${i}" value="${j}"> <span>${esc(o)}</span></label>`).join('')}</div>`
-          : `<input type="text" inputmode="${x.type === 'num' ? 'decimal' : 'text'}" id="q${i}" autocomplete="off" aria-label="Your answer">`}<div class="fb" id="fb${i}" aria-live="polite"></div></li>`).join('')}</ol>
+          : `<input type="text" inputmode="${x.type === 'num' ? 'decimal' : 'text'}" id="q${i}" autocomplete="off" aria-label="Your answer">`}<div class="fb" id="fb${i}" aria-live="polite"></div>${report({ place: 'quiz', ref: l.id, item: 'Question ' + (i + 1), context: `${l.title}: ${x.q}` }, '⚑ Report')}</li>`).join('')}</ol>
         <div class="row"><button class="btn primary" type="submit">Check my answers</button><span class="qscore" id="quiz-score" aria-live="polite"></span></div></form>`;
     }
     function markQuiz(quiz, form) {
@@ -225,6 +225,7 @@
       shell(admin ? 'lessons' : 'today', page(`<div class="narrow"><div class="page-head"><a class="small" href="${admin ? '#lessons' : '#today'}">← Back</a><p class="kicker dark"><span class="subj ${l.subject}">${SUBJECTS[l.subject] || ''}</span> · ${fmtDay(l.lesson_date)}</p><h1>${esc(l.title)}</h1></div>
         ${admin && l.status === 'draft' ? '<p class="msg warn">Draft: Hadi can\'t see this lesson until you approve its week on the Lessons page.</p>' : ''}
         <article class="lesson" id="lesson-body">${l.body_html}</article>
+        <p class="report-row">Spotted a mistake in this lesson? ${report({ place: 'lesson', ref: l.id, context: l.title })}</p>
         ${admin ? hadiWork(l) + '<section class="panel"><details class="other"><summary>Answer sheet for this lesson (only parents see this)</summary><p class="muted small">The right answers and marking guide. Claude uses it to mark Hadi\'s work, and you can use it to check a mark.</p><div class="lesson answers" id="answer-sheet"><p class="muted">Loading the answer sheet…</p></div></details></section>' : `
         <section class="panel" id="send"><h2>Send your work</h2>${p.subs.map((s) => subView(s)).join('')}
           <p class="muted">${p.sent ? 'Want to add more? Send it below.' : 'Type your answers, or take photos of your page. Then press Send.'}</p>
@@ -235,7 +236,7 @@
             <div id="send-msg"></div><button class="btn primary lg" type="submit" id="send-btn">Send my work</button></form></section>`}</div>`));
       const slot = app.querySelector('.quiz-slot');
       if (slot && l.quiz && l.quiz.length) {
-        slot.outerHTML = quizHtml(l.quiz) + (p.best ? `<p class="muted small">Your best so far: ${p.best.score}/${p.best.max}.</p>` : '');
+        slot.outerHTML = quizHtml(l.quiz, l) + (p.best ? `<p class="muted small">Your best so far: ${p.best.score}/${p.best.max}.</p>` : '');
         const form = document.getElementById('quiz');
         form.onsubmit = async (e) => { e.preventDefault(); const r = markQuiz(l.quiz, form);
           document.getElementById('quiz-score').textContent = `${r.score} / ${r.max}${r.score === r.max ? ' Brilliant!' : ''}`;

@@ -370,3 +370,16 @@ details.other summary { cursor: pointer; font-weight: 600; color: var(--primary)
 .tt input { width: 20px; height: 20px; }
 .warn-t { color: var(--warn); font-weight: 700; }
 @media (max-width: 720px) { .wk-edit li { grid-template-columns: 1fr auto; } .wk-edit li input[data-title] { grid-column: 1 / -1; } }
+
+/* ---------- report a problem ---------- */
+.course { min-width: 0; } .course-top .subject { overflow-wrap: anywhere; } .wk-left { flex: none; }
+.report-btn { background: none; border: 0; padding: 4px 6px; color: var(--muted); font: inherit; font-size: .8rem; cursor: pointer; border-radius: 6px; white-space: nowrap; }
+.report-btn:hover { color: var(--primary); background: var(--surface-2); } .report-btn:disabled { cursor: default; color: var(--ok); }
+.quiz li .report-btn { margin-top: 4px; }
+.wk-row .report-btn { margin-left: auto; padding: 0 6px; opacity: .55; } .wk-row:hover .report-btn, .wk-row .report-btn:focus-visible { opacity: 1; }
+.report-row { text-align: right; color: var(--muted); font-size: .85rem; margin: -6px 0 18px; }
+.modal-back { position: fixed; inset: 0; background: rgba(10, 14, 30, .5); display: grid; place-items: center; padding: 16px; z-index: 50; }
+.modal { background: var(--surface); color: var(--ink); border-radius: var(--radius); padding: 22px; width: min(480px, 100%); max-height: 90vh; overflow: auto; box-shadow: var(--shadow); }
+.modal .form { margin: 10px 0 0; } .kinds { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; } .kinds legend { font-weight: 600; font-size: .92rem; margin-bottom: 6px; }
+.kinds .radio { display: flex; gap: 8px; align-items: center; font-weight: 500; } .kinds input { width: auto; min-height: 0; }
+.fb-item p { margin: 6px 0; }

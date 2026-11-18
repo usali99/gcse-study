@@ -74,3 +74,13 @@ node tools/db.mjs upsert reports '[{"week":NN,"body_html":"<p>...</p>"}]' week
 ```
 
 Post the same summary, in a few lines, to the project thread.
+
+## Problem reports (both the Saturday run and the weekday marking run)
+
+Read new reports: `node tools/db.mjs get feedback "status=eq.new&order=created_at"`. Each has `place`
+(quiz / lesson / plan), `ref` (lesson id or course id), `item` (e.g. "Question 2" or "Week 5"), `kind`,
+`note` and `context`. For Hadi's lessons and quizzes, fix the lesson source in /mnt/project-files/lessons/
+and the live row (`patch lessons "id=eq.<id>" '<json>'`; never change a lesson's status), or the
+answer sheet. For a plan report, fix the topic list in docs/catalogue.js if it is wrong. Then mark it:
+`patch feedback "id=eq.<id>" '{"status":"fixed"}'` (or `"not_a_problem"` with a reason in the summary).
+List what was fixed in the summary.

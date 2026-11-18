@@ -52,9 +52,9 @@
           all('people'), all('schools'), all('school_members'), all('classes'), all('class_students'), all('guardianships'),
           all('courses', (q) => q.order('exam_date')), all('invites', (q) => q.order('created_at', { ascending: false })),
         ]);
-        let requests = [];
-        const { data: ses } = await sb.auth.getSession(); if (people.some((x) => x.is_platform_admin && ses.session && x.id === ses.session.user.id)) { try { requests = await all('invite_requests', (q) => q.order('created_at', { ascending: false })); } catch (e) { requests = []; } }
-        return { people, schools, members, classes, classStudents, guardianships, courses, invites, requests };
+        let requests = []; let feedback = [];
+        const { data: ses } = await sb.auth.getSession(); if (people.some((x) => x.is_platform_admin && ses.session && x.id === ses.session.user.id)) { try { requests = await all('invite_requests', (q) => q.order('created_at', { ascending: false })); } catch (e) { requests = []; } try { feedback = await all('feedback', (q) => q.order('created_at', { ascending: false })); } catch (e) { feedback = []; } }
+        return { people, schools, members, classes, classStudents, guardianships, courses, invites, requests, feedback };
       },
       async addCourse(c) { must(await sb.from('courses').insert(c)); },
       async updateCourse(id, patch) { const r = await sb.from('courses').update(patch).eq('id', id); if (r.error) throw new Error(/study_days/.test(r.error.message) ? 'Study days need a quick database update first. Ask the site owner to run v2-timetable.sql.' : r.error.message); },
@@ -65,6 +65,8 @@
       async requestInvite(r) { const { error } = await sb.from('invite_requests').insert(r); if (error) throw new Error(/already have a request|Too many/.test(error.message) ? error.message : /does not exist|schema cache/.test(error.message) ? 'Requests are not switched on yet. Please try again later.' : 'Something went wrong. Please check your details and try again.'); },
       async setRequest(id, status) { must(await sb.from('invite_requests').update({ status }).eq('id', id)); },
       async deleteRequest(id) { must(await sb.from('invite_requests').delete().eq('id', id)); },
+      async sendFeedback(f) { const { error } = await sb.from('feedback').insert(f); if (error) throw new Error(/a lot of reports|sign in/.test(error.message) ? error.message : /does not exist|schema cache/.test(error.message) ? 'Reports are not switched on yet. Please try again later.' : error.message); },
+      async setFeedback(id, status) { must(await sb.from('feedback').update({ status }).eq('id', id)); },
     };
   }
 
@@ -142,6 +144,7 @@
           courses: S.courses.filter((c) => canManage(c.student_id)).sort((a, b) => a.exam_date.localeCompare(b.exam_date)),
           invites: S.invites.filter((i) => i.created_by === m.id || m.is_platform_admin),
           requests: m.is_platform_admin ? (S.requests || []) : [],
+          feedback: m.is_platform_admin ? (S.feedback || []) : [],
         };
       },
       async updateCourse(id, patch) { const c = S.courses.find((x) => x.id === id); if (!c || !canManage(c.student_id)) throw new Error('You can only change courses for your own students.'); Object.assign(c, patch); save(); },
@@ -153,13 +156,44 @@
       async requestInvite(r) { S.requests = S.requests || []; if (S.requests.some((x) => x.email === r.email.toLowerCase())) throw new Error('We already have a request from this email. We\'ll be in touch soon.'); S.requests.unshift({ ...r, email: r.email.toLowerCase(), id: uid(), status: 'new', created_at: new Date().toISOString() }); save(); },
       async setRequest(id, status) { (S.requests || []).forEach((x) => { if (x.id === id) x.status = status; }); save(); },
       async deleteRequest(id) { S.requests = (S.requests || []).filter((x) => x.id !== id); save(); },
+      async sendFeedback(f) { S.feedback = S.feedback || []; S.feedback.unshift({ ...f, id: uid(), created_by: meId, status: 'new', created_at: new Date().toISOString() }); save(); },
+      async setFeedback(id, status) { (S.feedback || []).forEach((x) => { if (x.id === id) x.status = status; }); save(); },
     };
   }
 
   const recovering = /type=recovery/.test(location.hash);
   const api = cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase && !/[?&]preview/.test(location.search) ? supabaseApi() : demoApi();
   let me = null; let D = null;
-  const study = window.createStudy({ sb: api.sb, demo: api.demo, getMeId: () => me && me.id, shell: (...a) => shell(...a), page: (...a) => page(...a), esc, today, app });
+  // ---------- Report a problem ----------
+  const KIND = { wrong_answer: 'The answer or marking is wrong', unclear: "It's unclear or confusing", typo: 'Typo or spelling mistake', missing_topic: 'A topic is missing or wrong', other: 'Something else' };
+  const PLACE = { quiz: 'Quiz question', lesson: 'Lesson', plan: 'Course plan' };
+  function report(o, label) {
+    return `<button type="button" class="report-btn" data-report="${esc(JSON.stringify(o))}" aria-label="Report a problem${o.item ? ' with ' + esc(o.item) : ''}">${label === undefined ? '⚑ Report a problem' : label}</button>`;
+  }
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-report]'); if (!b) return;
+    e.preventDefault(); let o; try { o = JSON.parse(b.dataset.report); } catch (x) { return; }
+    const kinds = o.place === 'plan' ? ['missing_topic', 'unclear', 'typo', 'other'] : o.place === 'quiz' ? ['wrong_answer', 'unclear', 'typo', 'other'] : ['unclear', 'typo', 'wrong_answer', 'other'];
+    const wrap = document.createElement('div'); wrap.className = 'modal-back';
+    wrap.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="rp-h"><h2 id="rp-h">Report a problem</h2>
+      <p class="muted small">${esc(PLACE[o.place] || '')}${o.item ? ' · ' + esc(o.item) : ''}${o.context ? '<br>' + esc(o.context) : ''}</p>
+      <form class="form" id="rp-form"><fieldset class="kinds"><legend>What's wrong?</legend>${kinds.map((k, i) => `<label class="radio"><input type="radio" name="rp-kind" value="${k}" ${i === 0 ? 'checked' : ''}> ${KIND[k]}</label>`).join('')}</fieldset>
+        <label for="rp-note">Tell us more (optional)<textarea id="rp-note" rows="3" maxlength="1000" placeholder="${o.place === 'quiz' ? 'e.g. My answer “1800s” should count as right' : o.place === 'plan' ? 'e.g. This week should cover spreadsheets' : 'e.g. Step 3 uses a word that isn’t explained'}"></textarea></label>
+        <div id="rp-msg"></div><div class="row"><button class="btn primary" type="submit">Send report</button><button class="btn ghost" type="button" id="rp-cancel">Cancel</button></div></form></div>`;
+    document.body.appendChild(wrap);
+    const close = () => { wrap.remove(); b.focus(); };
+    wrap.addEventListener('click', (x) => { if (x.target === wrap) close(); });
+    wrap.addEventListener('keydown', (x) => { if (x.key === 'Escape') close(); });
+    wrap.querySelector('#rp-cancel').onclick = close; wrap.querySelector('input').focus();
+    wrap.querySelector('#rp-form').onsubmit = async (x) => {
+      x.preventDefault(); const btn = wrap.querySelector('[type=submit]'); btn.disabled = true; btn.textContent = 'Sending…';
+      try { await api.sendFeedback({ kind: wrap.querySelector('input[name=rp-kind]:checked').value, note: wrap.querySelector('#rp-note').value.trim(), place: o.place, ref: String(o.ref || '').slice(0, 100), item: String(o.item || '').slice(0, 40), context: String(o.context || '').slice(0, 300) });
+        wrap.querySelector('.modal').innerHTML = '<h2>Thank you</h2><p>Your report has been sent. We\'ll check it and fix it if needed.</p><div class="row"><button class="btn primary" id="rp-ok">Close</button></div>';
+        wrap.querySelector('#rp-ok').onclick = close; wrap.querySelector('#rp-ok').focus(); b.textContent = '✓ Reported'; b.disabled = true; }
+      catch (y) { btn.disabled = false; btn.textContent = 'Send report'; wrap.querySelector('#rp-msg').innerHTML = `<p class="msg err">${esc(y.message)}</p>`; }
+    };
+  });
+  const study = window.createStudy({ sb: api.sb, demo: api.demo, getMeId: () => me && me.id, shell: (...a) => shell(...a), page: (...a) => page(...a), esc, today, app, report });
 
   // Derived lookups over the loaded data.
   const person = (id) => D.people.find((p) => p.id === id) || { id, full_name: 'Someone', role: 'student' };
@@ -175,7 +209,7 @@
     const n = [['home', 'Dashboard'], ...study.nav()];
     if (me.is_platform_admin || ['school_admin', 'teacher', 'parent'].includes(me.role)) n.push(['invites', 'Invite codes']);
     n.push(['boards', 'Exam boards']);
-    if (me.is_platform_admin) n.push(['everyone', 'Everyone']);
+    if (me.is_platform_admin) { const nf = D && D.feedback ? D.feedback.filter((f) => f.status === 'new').length : 0; n.push(['everyone', 'Everyone'], ['feedback', `Feedback${nf ? ` <span class="count">${nf}</span>` : ''}`]); }
     return n;
   }
   function shell(route, inner, opts = {}) {
@@ -402,7 +436,7 @@
       </div>
       <section class="panel"><div class="panel-head"><h2>Week-by-week plan</h2><div class="legend"><span><i class="dot kind-teach"></i>Teaching</span><span><i class="dot kind-review"></i>Review</span><span><i class="dot kind-revision"></i>Revision</span><span><i class="dot kind-break"></i>Break</span></div></div>
         <div class="timeline">${Object.keys(byMonth).map((k) => `<div class="month"><h3>${fmt(k + '-15', { month: 'long', year: 'numeric' })}</h3>
-          <ol>${byMonth[k].map((w) => { const now = w.start <= t && t < new Date(new Date(w.start + 'T12:00:00').getTime() + 7 * 864e5).toISOString().slice(0, 10); return `<li class="wk-row kind-${w.kind} ${now ? 'now' : ''}"><span class="wk-n">Wk ${w.n}</span><span class="wk-d">${fmt(w.start, { day: 'numeric', month: 'short' })}</span><span class="wk-t">${esc(w.title)}${now ? ' <span class="tag">This week</span>' : ''}${w.done ? ' <span class="tag ok">Done</span>' : ''}</span></li>`; }).join('')}</ol></div>`).join('')}</div>
+          <ol>${byMonth[k].map((w) => { const now = w.start <= t && t < new Date(new Date(w.start + 'T12:00:00').getTime() + 7 * 864e5).toISOString().slice(0, 10); return `<li class="wk-row kind-${w.kind} ${now ? 'now' : ''}"><span class="wk-n">Wk ${w.n}</span><span class="wk-d">${fmt(w.start, { day: 'numeric', month: 'short' })}</span><span class="wk-t">${esc(w.title)}${now ? ' <span class="tag">This week</span>' : ''}${w.done ? ' <span class="tag ok">Done</span>' : ''}</span>${report({ place: 'plan', ref: c.id, item: 'Week ' + w.n, context: `${c.subject} (${c.code || c.board}): ${w.title}` }, '⚑')}</li>`; }).join('')}</ol></div>`).join('')}</div>
       </section>
       <section class="panel danger-zone"><div class="panel-head"><div><h2>Remove this course</h2><p class="muted small">This deletes the plan. It can't be undone.</p></div><button class="btn danger sm" id="del">Remove course</button></div><div id="confirm"></div></section>`));
     document.getElementById('del').onclick = () => {
@@ -642,12 +676,25 @@
       ${studyHere ? study.dashBlock() : ''}${overview(cs)}
       ${cs.length ? `<div class="course-grid">${cs.map((c) => courseCard(c)).join('')}</div>` : '<p class="muted small">No courses yet.</p>'}</article>`;
   }
+  function feedbackPage(filter) {
+    filter = filter || 'new'; const all = D.feedback || []; const list = all.filter((f) => (filter === 'new' ? f.status === 'new' : f.status !== 'new'));
+    const where = (f) => (f.place === 'plan' ? (D.courses.some((c) => c.id === f.ref) ? `#course-${esc(f.ref)}` : '') : f.ref && study.role ? `#lesson-${esc(f.ref)}` : '');
+    shell('feedback', page(`<div class="page-head"><p class="kicker dark">Owner</p><h1>Feedback</h1><p class="muted">Problems people reported on quiz questions, lessons and course plans. Claude's evening and Saturday runs fix Hadi's lessons and mark them fixed.</p></div>
+      <div class="row" style="margin-bottom:16px"><button class="btn ${filter === 'new' ? 'primary' : 'ghost'} sm" data-ff="new">New (${all.filter((f) => f.status === 'new').length})</button><button class="btn ${filter !== 'new' ? 'primary' : 'ghost'} sm" data-ff="done">Dealt with (${all.filter((f) => f.status !== 'new').length})</button></div>
+      ${list.length ? list.map((f) => `<section class="panel slim fb-item"><div class="panel-head"><div><span class="tagx">${esc(PLACE[f.place] || f.place)}${f.item ? ' · ' + esc(f.item) : ''}</span> <b>${esc(KIND[f.kind] || f.kind)}</b></div><span class="muted small">${esc(person(f.created_by).full_name)} · ${new Date(f.created_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span></div>
+        ${f.context ? `<p class="small muted">${esc(f.context)}</p>` : ''}${f.note ? `<p>${esc(f.note)}</p>` : ''}
+        <div class="row">${where(f) ? `<a class="btn ghost sm" href="${where(f)}">Open it</a>` : ''}${f.status === 'new' ? `<button class="btn primary sm" data-fs="fixed" data-id="${esc(f.id)}">Mark fixed</button><button class="btn ghost sm" data-fs="not_a_problem" data-id="${esc(f.id)}">Not a problem</button>` : `<span class="pill ${f.status === 'fixed' ? 'done' : 'todo'}">${f.status === 'fixed' ? 'Fixed' : 'Not a problem'}</span><button class="btn ghost sm" data-fs="new" data-id="${esc(f.id)}">Reopen</button>`}</div></section>`).join('')
+        : `<section class="panel"><p class="muted">${filter === 'new' ? 'No new reports.' : 'Nothing dealt with yet.'}</p></section>`}`));
+    app.querySelectorAll('[data-ff]').forEach((b) => { b.onclick = () => feedbackPage(b.dataset.ff); });
+    app.querySelectorAll('[data-fs]').forEach((b) => { b.onclick = async () => { b.disabled = true; await api.setFeedback(b.dataset.id, b.dataset.fs); await load(); feedbackPage(filter); }; });
+  }
   function ownerHome() {
     const by = (r) => D.people.filter((p) => p.role === r && !p.is_platform_admin).length;
     const open = (D.requests || []).filter((r) => r.status === 'new').length;
     const sid = study.role === 'admin' ? study.studentId() : null; const st = sid ? person(sid) : null;
     shell('home', page(`${head('You run the site. Here is everyone on it, and anything waiting for you.')}
       <div class="stats"><div class="stat"><span>Schools</span><b>${D.schools.length}</b></div><div class="stat"><span>Teachers</span><b>${by('teacher')}</b></div><div class="stat"><span>Parents</span><b>${by('parent')}</b></div><div class="stat"><span>Students</span><b>${by('student')}</b></div></div>
+      ${(() => { const nf = (D.feedback || []).filter((f) => f.status === 'new').length; return `<section class="panel"><div class="panel-head"><div><h2>Problem reports</h2><p class="muted small">${nf ? `${nf} new.` : 'Nothing new.'}</p></div><a class="btn ${nf ? 'primary' : 'ghost'} sm" href="#feedback">Feedback${nf ? ` <span class="count">${nf}</span>` : ''}</a></div></section>`; })()}
       <section class="panel"><div class="panel-head"><div><h2>Invite requests</h2><p class="muted small">${open ? `${open} waiting for a reply.` : 'Nothing waiting.'}</p></div><a class="btn ${open ? 'primary' : 'ghost'} sm" href="#invites">Invite codes and requests${open ? ` <span class="count">${open}</span>` : ''}</a></div></section>
       ${study.role === 'admin' ? `<section class="panel"><div class="panel-head"><h2>${st ? esc(st.full_name) + "'s study" : 'Study'}</h2></div>${study.dashBlock()}</section>` : ''}
       <section class="panel slim"><div class="panel-head"><div><h2>Everyone</h2><p class="muted small">${D.people.length} accounts, ${D.courses.length} course plans.</p></div><a class="btn ghost sm" href="#everyone">See everyone</a></div></section>`));
@@ -836,6 +883,7 @@
       if (route === 'invites') return invitesPage();
       if (route === 'account') return accountPage();
       if (route === 'everyone' && me.is_platform_admin) return everyonePage();
+      if (route === 'feedback' && me.is_platform_admin) return feedbackPage();
       if (await study.route(route)) return;
       if (me.role === 'student') return studentHome();
       if (me.is_platform_admin && !childrenOf(me.id).length && !coursesOf(me.id).length) return ownerHome();
