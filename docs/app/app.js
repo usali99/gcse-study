@@ -182,6 +182,44 @@
   }
   const page = (inner, cls = '') => `<main class="page ${cls}">${inner}</main>`;
 
+  // ---------- illustrations (landing page) ----------
+  const ICON = {
+    english: '<path d="M5 4h9a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z" /><path d="M8 8h6M8 11h6"/>',
+    maths: '<path d="M6 7h5M8.5 4.5v5M13 7h5M6 16.5l4 4M10 16.5l-4 4M13 15h5M13 19h5"/>',
+    physics: '<circle cx="12" cy="12" r="2"/><ellipse cx="12" cy="12" rx="9" ry="3.6"/><ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(-60 12 12)"/>',
+    chemistry: '<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3"/><path d="M7.5 15h9"/>',
+    biology: '<path d="M5 19c0-8 6-14 15-14 0 9-6 15-14 15z"/><path d="M5 19 13 11"/>',
+    history: '<path d="M4 20h16M6 20V10M10 20V10M14 20V10M18 20V10M3 10l9-6 9 6z"/>',
+    geography: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
+    computing: '<path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 6l-3 12"/>',
+  };
+  const icon = (k) => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
+  const ring = (pct, size = 44, label = '') => `<span class="ring" style="--p:${Math.max(0, Math.min(100, pct))};--s:${size}px" role="img" aria-label="${label || pct + '%'}"><span>${Math.round(pct)}%</span></span>`;
+  function illoSubjects() {
+    const subs = [['english', 'English Language', 1, 'c1'], ['maths', 'Maths', 1, 'c2'], ['physics', 'Physics', 1, 'c3'], ['chemistry', 'Chemistry', 1, 'c4'],
+      ['biology', 'Biology', 1, 'c5'], ['history', 'History', 0, 'c6'], ['geography', 'Geography', 0, 'c7'], ['computing', 'Computer Science', 0, 'c8']];
+    return `<div class="illo illo-subjects" aria-hidden="true">${subs.map(([k, n, on, c], i) => `<div class="tile ${on ? 'on' : ''}" style="--r:${[-3, 2, -1, 3, 1, -2, 2, -1][i]}deg"><span class="ti ${c}">${icon(k)}</span><span class="tn">${n}</span><span class="tick">${on ? '<svg viewBox="0 0 16 16" width="12" height="12"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}</span></div>`).join('')}</div>`;
+  }
+  function illoPlan() {
+    const rows = [['english', 'c1', 'English Language', 'Paper 1 Q4: evaluation', 72], ['maths', 'c2', 'Maths', 'Fractions and percentages', 58], ['physics', 'c3', 'Physics', 'Energy stores', 40], ['chemistry', 'c4', 'Chemistry', 'Atomic structure', 85]];
+    return `<div class="illo illo-plan" aria-hidden="true"><div class="rows">${rows.map(([k, c, n, t, p]) => `<div class="prow"><span class="ti ${c}">${icon(k)}</span><span class="pt"><b>${n}</b><small>${t}</small><span class="pbar"><span style="width:${p}%"></span></span></span><span class="pp">${p}%</span></div>`).join('')}</div>
+      <div class="float-card"><div class="fc-top"><span class="flame">●</span><b>12</b><span>day streak</span></div><div class="fc-big">3h 20m</div><div class="fc-sub">studied this week</div>
+        <div class="mini-bars">${[40, 65, 30, 80, 55, 0, 0].map((h, i) => `<span style="height:${Math.max(h, 6)}%" class="${h ? '' : 'off'}"></span>`).join('')}</div><div class="mini-days"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div></div></div>`;
+  }
+  function illoFeedback() {
+    return `<div class="illo illo-feedback" aria-hidden="true"><div class="fb-card">
+      <div class="fb-q"><span class="chip-s">Physics · Q4</span><span class="mark">4 / 6</span></div>
+      <p class="fb-text">Describe how the energy from a falling object is transferred when it hits the ground.</p>
+      <div class="fb-ans">The kinetic energy store <mark class="good">decreases</mark> and energy is transferred to the <mark class="good">thermal store</mark> of the ground and <mark class="miss">by sound</mark>…</div>
+      <div class="fb-pt good"><b>+2</b> Named both energy stores correctly</div>
+      <div class="fb-pt miss"><b>−2</b> Say that energy is dissipated, so less is usefully transferred</div></div></div>`;
+  }
+  function illoProgress() {
+    return `<div class="illo illo-progress" aria-hidden="true"><div class="pg-card"><div class="rings">
+      <div>${ring(78, 64)}<small>English</small></div><div>${ring(64, 64)}<small>Maths</small></div><div>${ring(52, 64)}<small>Science</small></div></div>
+      <div class="pg-sub">Weak topics</div><div class="chips"><span class="wchip red">Simultaneous equations</span><span class="wchip amber">Comma splices</span><span class="wchip green">Atomic structure ✓</span></div></div></div>`;
+  }
+
   // ---------- landing ----------
   function landing() {
     const sample = C.buildPlan({ start: today(), exam: C.examSeries(today())[2].date, topics: C.topicsFor(C.SPECS[0], 'Foundation'), hoursPerWeek: 2 }).filter((w) => w.kind !== 'break').slice(0, 5);
@@ -201,14 +239,14 @@
         </div>
       </div></section>
       ${page(`
+      <div class="trust-strip"><span><b>5</b> exam boards</span><span><b>${C.SPECS.length}</b> ready-made specifications</span><span><b>GCSE</b> and International GCSE</span><span><b>&lt; 1 min</b> to build a plan</span></div>
       <section class="band">
         <h2 class="section-title">Everything a GCSE year needs, in one place</h2>
-        <div class="features">
-          ${[['plan', 'Course plans in minutes', 'Exam board, subject, specification code and exam date in. A week-by-week plan to the exam out, with review weeks and revision built in.'],
-            ['quiz', 'Quizzes that mark themselves', 'Every lesson opens with a quick memory quiz. Answers are checked instantly, so gaps show up the same day.'],
-            ['mark', 'Written work, properly marked', 'Students type answers or upload a photo of their page. Work is marked to the board\'s mark scheme style, with feedback.'],
-            ['track', 'Progress everyone can see', 'Weak topics, scores and time taken, by subject. Parents and teachers see the same picture as the student.']]
-            .map(([i, t, d]) => `<article class="feature"><span class="ficon ficon-${i}" aria-hidden="true"></span><h3>${t}</h3><p>${d}</p></article>`).join('')}
+        <div class="showcase">
+          <article class="show show-blue"><p class="show-k">Choose your subjects</p><p class="show-t">Pick the board and specification for each subject, and GCSE Study builds a week-by-week plan to the exam.</p>${illoSubjects()}</article>
+          <article class="show show-green"><p class="show-k">Follow your plan</p><p class="show-t">Each week shows what to study in every subject, with progress you can see building towards the exam.</p>${illoPlan()}</article>
+          <article class="show show-amber"><p class="show-k">Get marked feedback</p><p class="show-t">Written answers are marked mark-scheme style: where marks were gained, where they were lost, and how to fix it.</p>${illoFeedback()}</article>
+          <article class="show show-violet"><p class="show-k">Know where you stand</p><p class="show-t">Scores, weak topics and time spent by subject, shared with the parent or teacher who supports you.</p>${illoProgress()}</article>
         </div>
       </section>
       <section class="band">
@@ -303,7 +341,7 @@
     const w = thisWeek(c); const total = (c.plan || []).filter((x) => x.kind !== 'break').length;
     const done = (c.plan || []).filter((x) => x.kind !== 'break' && x.start <= today()).length;
     return `<a class="course" href="#course-${esc(c.id)}">
-      <div class="course-top"><span class="subject">${esc(c.subject)}</span><span class="wk-left"><b>${weeksUntil(c.exam_date)}</b> wks</span></div>
+      <div class="course-top">${ring(total ? done / total * 100 : 0, 46, `${done} of ${total} weeks done`)}<span class="subject">${esc(c.subject)}</span><span class="wk-left"><b>${weeksUntil(c.exam_date)}</b> wks</span></div>
       <div class="course-meta">${esc(c.board)} · ${esc(c.qualification)}${c.code ? ' · ' + esc(c.code) : ''}${c.tier ? ' · ' + esc(c.tier) : ''}${showStudent ? ` · <b>${esc(person(c.student_id).full_name)}</b>` : ''}</div>
       ${w ? `<div class="course-now"><span class="kind kind-${w.kind}">${w.kind === 'teach' ? 'This week' : w.kind === 'review' ? 'Review week' : w.kind === 'revision' ? 'Revision' : 'Break'}</span>${esc(w.title)}</div>` : ''}
       <div class="meter" role="img" aria-label="${done} of ${total} weeks done"><span style="width:${total ? Math.round(done / total * 100) : 0}%"></span></div>
@@ -485,11 +523,23 @@
     const parents = D.guardianships.filter((g) => g.student_id === me.id).map((g) => person(g.parent_id).full_name);
     const classes = D.classes.filter((c) => D.classStudents.some((x) => x.class_id === c.id && x.student_id === me.id));
     shell('home', page(`${head(parents.length ? `Your courses are managed with ${esc(parents.join(' and '))}.` : classes.length ? `You're in ${esc(classes.map((c) => c.name).join(', '))}.` : '')}
-      ${thisWeekBlock(me.id)}${coursesBlock(me.id, 'My courses', true)}`));
+      ${overview(coursesOf(me.id))}${thisWeekBlock(me.id)}${coursesBlock(me.id, 'My courses', true)}`));
+  }
+  function overview(cs) {
+    if (!cs.length) return '';
+    const t = today(); const weeks = cs.map((c) => (c.plan || []).filter((w) => w.kind !== 'break'));
+    const longest = weeks.reduce((a, w) => (w.length > a.length ? w : a), []);
+    const total = longest.length; const done = longest.filter((x) => x.start <= t).length;
+    const next = cs.map((c) => c.exam_date).sort()[0];
+    const hours = cs.reduce((a, c) => a + Number(c.hours_per_week || 0), 0);
+    return `<section class="overview"><div class="ov-ring">${ring(total ? done / total * 100 : 0, 92, 'Plan progress')}<div><b>Plan progress</b><span class="muted small">Week ${done} of ${total} on the way to the exams</span></div></div>
+      <div class="ov-stat"><span>First exam</span><b>${weeksUntil(next)} weeks</b><small class="muted">${fmt(next, { day: 'numeric', month: 'short', year: 'numeric' })}</small></div>
+      <div class="ov-stat"><span>Study time</span><b>${hours} h</b><small class="muted">planned each week</small></div>
+      <div class="ov-stat"><span>Courses</span><b>${cs.length}</b><small class="muted">${esc([...new Set(cs.map((c) => c.board))].join(', '))}</small></div></section>`;
   }
   function childCard(ch) {
     const cs = coursesOf(ch.id);
-    return `<article class="person-card"><div class="pc-head"><span class="avatar lg">${esc(initials(ch.full_name))}</span><div><h3>${esc(ch.full_name)}</h3><span class="muted small">${cs.length} course${cs.length === 1 ? '' : 's'}</span></div><a class="btn primary sm" href="#plan-for-${esc(ch.id)}">Add a course</a></div>
+    return `<article class="person-card">${overview(cs)}<div class="pc-head"><span class="avatar lg">${esc(initials(ch.full_name))}</span><div><h3>${esc(ch.full_name)}</h3><span class="muted small">${cs.length} course${cs.length === 1 ? '' : 's'}</span></div><a class="btn primary sm" href="#plan-for-${esc(ch.id)}">Add a course</a></div>
       ${cs.length ? `<div class="course-grid">${cs.map((c) => courseCard(c)).join('')}</div>` : '<p class="muted small">No courses yet.</p>'}</article>`;
   }
   function parentHome() {
