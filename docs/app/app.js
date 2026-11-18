@@ -161,6 +161,7 @@
     if (!me || !me.role) return [];
     const n = [['home', 'Dashboard']];
     if (me.is_platform_admin || ['school_admin', 'teacher', 'parent'].includes(me.role)) n.push(['invites', 'Invite codes']);
+    n.push(['boards', 'Exam boards']);
     if (me.is_platform_admin) n.push(['everyone', 'Everyone']);
     return n;
   }
@@ -191,7 +192,7 @@
           <h1>A clear plan from today to the exam hall.</h1>
           <p class="lede">Pick the exam board, subject and specification code. GCSE Study builds a week-by-week plan to the exam, then turns each week into short lessons, self-marking quizzes and marked practice.</p>
           <div class="cta"><a class="btn accent lg" href="#signup">Get started</a><a class="btn outline-light lg" href="#signin">Sign in</a></div>
-          <p class="fine">Invite-only beta. You need an invite code to create an account.</p>
+          <p class="fine">Invite-only beta. You need an invite code to create an account. <a class="light-link" href="#boards">Not sure of your exam board?</a></p>
         </div>
         <div class="hero-card" aria-label="Example plan">
           <div class="hc-head"><span class="chip">Pearson Edexcel · 1MA1 Foundation</span><span class="countdown"><b>${weeksUntil(C.examSeries(today())[2].date)}</b> weeks to go</span></div>
@@ -359,7 +360,7 @@
     const steps = ['Exam board', 'Qualification', 'Subject and code', 'Exam date', 'Check and create'];
     const quals = [...new Set(C.SPECS.filter((s) => s.board === st.board).map((s) => s.qual))];
     let body = '';
-    if (st.step === 1) body = `<h2>Which exam board?</h2><div class="opt-grid">${C.BOARDS.map((b) => `<button class="opt" data-k="board" data-v="${esc(b)}">${esc(b)}</button>`).join('')}</div>`;
+    if (st.step === 1) body = `<h2>Which exam board?</h2><p class="small muted">Not sure? <a href="#boards">How to find your exam board</a></p><div class="opt-grid">${C.BOARDS.map((b) => `<button class="opt" data-k="board" data-v="${esc(b)}">${esc(b)}</button>`).join('')}</div>`;
     if (st.step === 2) body = `<h2>Which qualification?</h2><div class="opt-grid">${(quals.length ? quals : C.QUALS).map((q) => `<button class="opt" data-k="qual" data-v="${esc(q)}">${esc(q)}</button>`).join('')}</div>`;
     if (st.step === 3) body = `<h2>Which subject?</h2>
       <div class="opt-grid">${specs.map((s) => `<button class="opt" data-k="code" data-v="${esc(s.code)}"><b>${esc(s.subject)}</b><small>${esc(s.code)}</small></button>`).join('')}</div>
@@ -563,6 +564,29 @@
       catch (x) { out.innerHTML = `<p class="msg err">${esc(x.message)}</p>`; b.disabled = false; } };
   }
 
+  // ---------- exam board guide ----------
+  function boardsPage() {
+    const G = window.BOARD_GUIDE;
+    const ours = new Set(C.SPECS.map((x) => x.code));
+    const cell = (v) => v ? esc(v).replace(/\b([0-9A-Z]{4})\b/g, (m) => ours.has(m) ? `<b>${m}</b>` : m) : '<span class="muted">–</span>';
+    shell('boards', page(`
+      <div class="page-head">${me ? '<a class="small" href="#home">← Dashboard</a>' : '<a class="small" href="#">← Home</a>'}<p class="kicker dark">Guide</p><h1>Exam boards</h1>
+        <p class="muted guide-lede">Every GCSE is set by an exam board. Boards cover the same core content, but their papers, question styles and mark schemes differ, so revising with the right board's past papers matters. Here's how to find yours.</p></div>
+      <section class="panel"><h2>How to find your exam board</h2>
+        <ol class="find-list">${G.FIND.map(([t, d]) => `<li><b>${esc(t)}</b><span>${esc(d)}</span></li>`).join('')}</ol></section>
+      <section class="panel"><h2>Studying at home or as a private candidate</h2>
+        <p class="muted">There's no school to decide for you, so the exam centre usually does.</p>
+        <ul class="tick-list">${G.PRIVATE.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></section>
+      <section class="panel"><h2>The boards</h2>
+        <div class="board-grid">${G.BOARDS.map((b) => `<article class="board-card"><h3>${esc(b.name)}</h3><p class="small muted">${esc(b.where)}</p><p class="small">${esc(b.note)}</p><a class="small" href="${esc(b.site)}" target="_blank" rel="noopener">Specifications on the board's site ↗</a></article>`).join('')}</div>
+        <p class="small muted">GCSEs in England are regulated by Ofqual, in Wales by Qualifications Wales, and in Northern Ireland by CCEA Regulation.</p></section>
+      <section class="panel"><div class="panel-head"><h2>Specification codes</h2><span class="small muted"><b>Bold</b> codes have a ready-made course plan</span></div>
+        <p class="small muted">The code identifies the exact course. Check it on the board's website before booking, as boards sometimes replace specifications.</p>
+        <div class="scroll-x"><table class="data"><thead><tr><th>Subject</th><th>AQA</th><th>Pearson Edexcel</th><th>OCR</th></tr></thead>
+        <tbody>${G.CODES.map(([sub, a, e, o]) => `<tr><td><b>${esc(sub)}</b></td><td>${cell(a)}</td><td>${cell(e)}</td><td>${cell(o)}</td></tr>`).join('')}</tbody></table></div></section>
+      ${me ? '<div class="cta center"><a class="btn primary lg" href="#home">Back to your dashboard</a></div>' : '<div class="cta center"><a class="btn accent lg" href="#signup">Get started</a></div>'}`), { dark: !me });
+  }
+
   // ---------- router ----------
   async function load() { D = await api.load(); return D; }
   async function render() {
@@ -573,6 +597,7 @@
         if (route === 'signin') return signInView();
         if (route === 'signup') return signUpView();
         if (route === 'forgot') return forgotView();
+        if (route === 'boards') return boardsPage();
         return landing();
       }
       if (!me.role) return shell('', page('<section class="panel"><h1>Almost there</h1><p>This login isn\'t set up for the new site yet. Ask the site owner to add it.</p></section>'));
@@ -580,6 +605,7 @@
       if (recovering && !window.__recoveryShown) { window.__recoveryShown = true; history.replaceState(null, '', location.pathname + location.search + '#account'); return accountPage({ recovery: true }); }
       if (route === '' || route === 'signin' || route === 'signup') { location.replace('#home'); return; }
       if (route === 'welcome') return landing();
+      if (route === 'boards') return boardsPage();
       if (route.startsWith('course-')) return coursePage(route.slice(7));
       if (route.startsWith('plan-for-')) return wizard(route.slice(9));
       if (route === 'invites') return invitesPage();

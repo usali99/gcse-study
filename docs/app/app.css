@@ -210,3 +210,11 @@ label.inline { max-width: 420px; }
   .summary { grid-template-columns: 1fr; gap: 2px; } .summary dd { margin-bottom: 8px; }
   .invite-box { flex-direction: column; align-items: stretch; }
 }
+
+/* exam board guide */
+.guide-lede { max-width: 46em; }
+.find-list { margin: 0; padding-left: 1.3em; display: grid; gap: 12px; } .find-list li { padding-left: 4px; } .find-list b { display: block; } .find-list span { color: var(--ink-2); font-size: .95rem; }
+.tick-list { margin: 0; padding-left: 1.2em; display: grid; gap: 8px; color: var(--ink-2); }
+.board-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.board-card { border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 4px; align-content: start; } .board-card p { margin: 0; }
+.light-link { color: var(--accent); }
