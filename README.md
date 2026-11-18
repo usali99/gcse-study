@@ -21,8 +21,44 @@ uploading written work, marking, weak topics and weekly approval of new lessons.
 | Weak topics | Read only | Read and edit |
 | Weekly summaries | No | Yes |
 
-Accounts are created by the parent in Supabase (sign-ups switched off). New accounts are students;
+Accounts for this site are created by the parent in Supabase. New accounts are students;
 `select public.make_admin('email');` in the SQL editor makes the parent the admin.
 
 Note: the self-marking quiz answers are sent to the browser so it can mark instantly. They are short
 recall questions; the full answer sheets never are.
+
+## Version 2 (test): schools, teachers, parents and students
+
+`docs/app/` is a separate, invite-only version served at `/app/`. It uses the same Supabase project
+with its own tables, so the site above is unaffected.
+
+- Landing page, sign in, sign up as School, Teacher, Parent or Student, and My account (name, email, password, forgotten password).
+- Course plans: choose exam board, qualification, subject and code, tier and exam date; `docs/app/catalogue.js`
+  holds the specifications and builds the week-by-week plan (review weeks, revision, school holidays).
+- Dashboards: students see this week and their courses; parents manage their children; teachers run classes;
+  school admins see staff, classes and students; the owner sees everyone.
+- `?preview` on the URL (or empty config) runs it with example accounts saved only in the browser.
+
+### Setup
+
+1. Run `supabase/v2-roles.sql` in the SQL editor (safe to run again).
+2. Make the owner and link a child:
+   `select public.v2_add_person('email', 'parent', 'Name', true);`
+   `select public.v2_add_person('child-email', 'student', 'Name');`
+   `select public.v2_link_parent('email', 'child-email');`
+3. Authentication: turn on "Allow new users to sign up". Every sign-up still needs a valid invite code,
+   checked in the database. Set Site URL and Redirect URLs to the `/app/` address for email links.
+4. Invite codes are made on the Invite codes page: the owner can invite any account type; a school admin
+   invites teachers; a teacher makes one code per class; a parent invites their child. Codes expire after 30 days.
+
+### Who can see what
+
+| | Owner | School admin | Teacher | Parent | Student |
+|---|---|---|---|---|---|
+| People | Everyone | Own school's staff and students | Own school's staff, own classes' students | Own children | Self, own parents and teachers |
+| Courses | All | Students in the school's classes | Students in own classes | Own children's | Own |
+| Create course plans | Anyone | School's students | Own classes' students | Own children | Self |
+
+Users can change only their own name; roles and owner status can't be changed from the website.
+`supabase/v2-check-access.sql` (read-only) shows what each account can see and confirms that escalation is refused.
+Run it after any change to the access rules.
