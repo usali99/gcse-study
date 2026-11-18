@@ -647,9 +647,12 @@
         const link = location.href.split('#')[0] + '#signup';
         const body = `Hi ${r.full_name.split(' ')[0]},\n\nThank you for your interest in GCSE Study. Here is your invite code:\n\n${code}\n\nTo create your account, go to ${link}, choose "${ROLE[r.role]}" and enter the code. It works once and expires in 30 days.\n\nBest wishes,\n${me.full_name}`;
         const mail = `mailto:${encodeURIComponent(r.email)}?subject=${encodeURIComponent('Your GCSE Study invite code')}&body=${encodeURIComponent(body)}`;
+        const gmail = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(r.email)}&su=${encodeURIComponent('Your GCSE Study invite code')}&body=${encodeURIComponent(body)}`;
         await load(); invitesPage();
-        document.getElementById('req-flash').innerHTML = `<p class="msg ok">Code ${esc(code)} made for ${esc(r.full_name)}. <a href="${esc(mail)}">Open the email to send it</a></p>`;
-        window.location.href = mail;
+        const fl = document.getElementById('req-flash');
+        fl.innerHTML = `<div class="msg ok"><p><b>Code ${esc(code)} made for ${esc(r.full_name)}.</b> Now send it to ${esc(r.email)}:</p>
+          <div class="row"><a class="btn primary sm" href="${esc(gmail)}" target="_blank" rel="noopener">Open in Gmail</a><a class="btn ghost sm" href="${esc(mail)}">Other mail app</a><button class="btn ghost sm" id="copy-mail">Copy the message</button></div></div>`;
+        document.getElementById('copy-mail').onclick = (e) => navigator.clipboard.writeText(body).then(() => { e.target.textContent = 'Copied'; }, () => { e.target.textContent = 'Copy failed'; });
       } catch (x) { b.disabled = false; document.getElementById('req-flash').innerHTML = `<p class="msg err">${esc(x.message)}</p>`; }
     }; });
     app.querySelectorAll('[data-req-done]').forEach((b) => { b.onclick = async () => { await api.setRequest(b.dataset.reqDone, 'done'); await load(); invitesPage(); }; });
