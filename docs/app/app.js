@@ -26,7 +26,7 @@
     const must = ({ data, error }) => { if (error) throw new Error(error.message); return data; };
     const all = async (t, q) => must(await (q ? q(sb.from(t).select('*')) : sb.from(t).select('*')));
     return {
-      demo: false,
+      demo: false, sb,
       async me() {
         const { data } = await sb.auth.getSession();
         if (!data.session) return null;
@@ -157,6 +157,7 @@
   const recovering = /type=recovery/.test(location.hash);
   const api = cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase && !/[?&]preview/.test(location.search) ? supabaseApi() : demoApi();
   let me = null; let D = null;
+  const study = window.createStudy({ sb: api.sb, demo: api.demo, getMeId: () => me && me.id, shell: (...a) => shell(...a), page: (...a) => page(...a), esc, today, app });
 
   // Derived lookups over the loaded data.
   const person = (id) => D.people.find((p) => p.id === id) || { id, full_name: 'Someone', role: 'student' };
@@ -169,7 +170,7 @@
   // ---------- shell ----------
   function navFor() {
     if (!me || !me.role) return [];
-    const n = [['home', 'Dashboard']];
+    const n = [['home', 'Dashboard'], ...study.nav()];
     if (me.is_platform_admin || ['school_admin', 'teacher', 'parent'].includes(me.role)) n.push(['invites', 'Invite codes']);
     n.push(['boards', 'Exam boards']);
     if (me.is_platform_admin) n.push(['everyone', 'Everyone']);
@@ -187,7 +188,7 @@
       ${inner}
       <footer class="foot"><div class="foot-in"><span>GCSE Study · invite-only beta</span><span>Plans follow the exam boards' published specifications. Always check dates with your exam centre.</span></div></footer>`;
     const so = document.getElementById('signout');
-    if (so) so.onclick = async () => { await api.signOut(); me = null; location.hash = ''; render(); };
+    if (so) so.onclick = async () => { await api.signOut(); study.forget(); me = null; location.hash = ''; render(); };
     window.scrollTo(0, 0);
   }
   const page = (inner, cls = '') => `<main class="page ${cls}">${inner}</main>`;
@@ -299,7 +300,7 @@
       </div></div>`));
     if (api.demo) {
       app.querySelectorAll('[data-acct]').forEach((b) => { b.onclick = async () => { await api.signIn(b.dataset.acct); location.hash = '#home'; render(); }; });
-      document.getElementById('reset').onclick = (e) => { api.reset(); e.target.textContent = 'Preview reset'; };
+      document.getElementById('reset').onclick = (e) => { api.reset(); if (study.reset) study.reset(); e.target.textContent = 'Preview reset'; };
     } else {
       document.getElementById('f').onsubmit = async (e) => {
         e.preventDefault(); const b = document.getElementById('go'); b.disabled = true; b.textContent = 'Signing in…';
@@ -534,7 +535,7 @@
     const parents = D.guardianships.filter((g) => g.student_id === me.id).map((g) => person(g.parent_id).full_name);
     const classes = D.classes.filter((c) => D.classStudents.some((x) => x.class_id === c.id && x.student_id === me.id));
     shell('home', page(`${head(parents.length ? `Your courses are managed with ${esc(parents.join(' and '))}.` : classes.length ? `You're in ${esc(classes.map((c) => c.name).join(', '))}.` : '')}
-      ${overview(coursesOf(me.id))}${thisWeekBlock(me.id)}${coursesBlock(me.id, 'My courses', true)}`));
+      ${study.dashBlock()}${overview(coursesOf(me.id))}${thisWeekBlock(me.id)}${coursesBlock(me.id, 'My courses', true)}`));
   }
   function overview(cs) {
     if (!cs.length) return '';
@@ -550,7 +551,9 @@
   }
   function childCard(ch) {
     const cs = coursesOf(ch.id);
-    return `<article class="person-card">${overview(cs)}<div class="pc-head"><span class="avatar lg">${esc(initials(ch.full_name))}</span><div><h3>${esc(ch.full_name)}</h3><span class="muted small">${cs.length} course${cs.length === 1 ? '' : 's'}</span></div><a class="btn primary sm" href="#plan-for-${esc(ch.id)}">Add a course</a></div>
+    const studyHere = study.role === 'admin' && ch.id === (study.studentId() || childrenOf(me.id)[0].id);
+    return `<article class="person-card"><div class="pc-head"><span class="avatar lg">${esc(initials(ch.full_name))}</span><div><h3>${esc(ch.full_name)}</h3><span class="muted small">${cs.length} course${cs.length === 1 ? '' : 's'}</span></div><a class="btn primary sm" href="#plan-for-${esc(ch.id)}">Add a course</a></div>
+      ${studyHere ? study.dashBlock() : ''}${overview(cs)}
       ${cs.length ? `<div class="course-grid">${cs.map((c) => courseCard(c)).join('')}</div>` : '<p class="muted small">No courses yet.</p>'}</article>`;
   }
   function parentHome() {
@@ -724,6 +727,8 @@
       }
       if (!me.role) return shell('', page('<section class="panel"><h1>Almost there</h1><p>This login isn\'t set up for the new site yet. Ask the site owner to add it.</p></section>'));
       await load();
+      if (!study.checked) await study.init();
+      if (study.role) await study.load();
       if (recovering && !window.__recoveryShown) { window.__recoveryShown = true; history.replaceState(null, '', location.pathname + location.search + '#account'); return accountPage({ recovery: true }); }
       if (route === '' || route === 'signin' || route === 'signup') { location.replace('#home'); return; }
       if (route === 'welcome') return landing();
@@ -733,6 +738,7 @@
       if (route === 'invites') return invitesPage();
       if (route === 'account') return accountPage();
       if (route === 'everyone' && me.is_platform_admin) return everyonePage();
+      if (await study.route(route)) return;
       if (me.role === 'student') return studentHome();
       if (me.role === 'parent') return parentHome();
       if (me.role === 'teacher') return teacherHome();
