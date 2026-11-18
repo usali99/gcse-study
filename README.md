@@ -33,6 +33,7 @@ The main site (`docs/`) is the invite-only multi-role version, served at the sit
 with its own tables, so the site above is unaffected.
 
 - Landing page, sign in, sign up as School, Teacher, Parent or Student, and My account (name, email, password, forgotten password).
+- Edit a plan (dates, tier, hours rebuild it; rename, move, retype or tick weeks done) and a weekly timetable (study days per subject; run `supabase/v2-timetable.sql` once).
 - Course plans: choose exam board, qualification, subject and code, tier and exam date; `docs/catalogue.js`
   holds the specifications and builds the week-by-week plan (review weeks, revision, school holidays).
 - Dashboards: students see this week and their courses; parents manage their children; teachers run classes;

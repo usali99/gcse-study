@@ -57,6 +57,7 @@
         return { people, schools, members, classes, classStudents, guardianships, courses, invites, requests };
       },
       async addCourse(c) { must(await sb.from('courses').insert(c)); },
+      async updateCourse(id, patch) { const r = await sb.from('courses').update(patch).eq('id', id); if (r.error) throw new Error(/study_days/.test(r.error.message) ? 'Study days need a quick database update first. Ask the site owner to run v2-timetable.sql.' : r.error.message); },
       async deleteCourse(id) { must(await sb.from('courses').delete().eq('id', id)); },
       async addInvite(i) { must(await sb.from('invites').insert(i)); },
       async deleteInvite(code) { must(await sb.from('invites').delete().eq('code', code)); },
@@ -143,6 +144,7 @@
           requests: m.is_platform_admin ? (S.requests || []) : [],
         };
       },
+      async updateCourse(id, patch) { const c = S.courses.find((x) => x.id === id); if (!c || !canManage(c.student_id)) throw new Error('You can only change courses for your own students.'); Object.assign(c, patch); save(); },
       async addCourse(c) { if (!canManage(c.student_id)) throw new Error('You can only plan courses for your own students.'); S.courses.push({ ...c, id: uid(), created_at: new Date().toISOString() }); save(); },
       async deleteCourse(id) { S.courses = S.courses.filter((c) => c.id !== id); save(); },
       async addInvite(i) { S.invites.unshift({ ...i, uses: 0, created_by: meId, created_at: new Date().toISOString() }); save(); },
@@ -364,13 +366,23 @@
       ${cs.length ? `<div class="course-grid">${cs.map((c) => courseCard(c)).join('')}</div>` : `<div class="empty"><b>No courses yet.</b><span>A course plan takes about a minute: board, subject, specification code and exam date.</span>${canAdd ? `<a class="btn primary sm" href="#plan-for-${esc(sid)}">Create the first plan</a>` : ''}</div>`}
     </section>`;
   }
+  const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const DAYS_LONG = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const daysOf = (c) => (Array.isArray(c.study_days) ? c.study_days.map(Number).filter((d) => d >= 1 && d <= 7) : []);
+  const perDay = (c) => { const n = daysOf(c).length; return n ? Math.max(5, Math.round((Number(c.hours_per_week) * 60) / n / 5) * 5) : 0; };
+  const mins = (m) => (m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ' ' + (m % 60) + ' min' : ''}` : `${m} min`);
   function thisWeekBlock(sid) {
     const cs = coursesOf(sid).map((c) => ({ c, w: thisWeek(c) })).filter((x) => x.w);
     if (!cs.length) return '';
-    return `<section class="panel"><div class="panel-head"><h2>This week</h2><span class="muted small">Week of ${fmt(cs[0].w.start, { day: 'numeric', month: 'long' })}</span></div>
-      <ul class="week-list">${cs.map(({ c, w }) => `<li><span class="dot kind-${w.kind}"></span><span><b>${esc(c.subject)}</b> ${esc(w.title)}</span><span class="muted small">${w.hours ? `${w.hours} h` : ''}</span></li>`).join('')}</ul></section>`;
+    const head = `<div class="panel-head"><h2>This week</h2><div class="row"><span class="muted small">Week of ${fmt(cs[0].w.start, { day: 'numeric', month: 'long' })}</span><a class="btn ghost sm" href="#timetable-${esc(sid)}">Weekly timetable</a></div></div>`;
+    const line = ({ c, w }, m) => `<li><span class="dot kind-${w.kind}"></span><span><b>${esc(c.subject)}</b> ${esc(w.title)}${w.done ? ' <span class="tag ok">Done</span>' : ''}</span><span class="muted small">${m ? mins(m) : w.hours ? `${w.hours} h` : ''}</span></li>`;
+    if (!cs.some(({ c }) => daysOf(c).length)) return `<section class="panel">${head}<ul class="week-list">${cs.map((x) => line(x)).join('')}</ul></section>`;
+    const todayN = ((new Date().getDay() + 6) % 7) + 1;
+    const loose = cs.filter(({ c }) => !daysOf(c).length);
+    return `<section class="panel">${head}<div class="days">${DAYS_LONG.map((d, i) => { const list = cs.filter(({ c, w }) => w.kind !== 'break' && daysOf(c).includes(i + 1)); if (!list.length) return '';
+        return `<div class="day ${i + 1 === todayN ? 'today' : ''}"><h3>${d}${i + 1 === todayN ? ' <span class="tag">Today</span>' : ''}<span class="muted small">${mins(list.reduce((a, x) => a + perDay(x.c), 0))}</span></h3><ul class="week-list">${list.map((x) => line(x, perDay(x.c))).join('')}</ul></div>`; }).join('')}
+      ${loose.length ? `<div class="day"><h3>Any day this week</h3><ul class="week-list">${loose.map((x) => line(x)).join('')}</ul></div>` : ''}</div></section>`;
   }
-
   function coursePage(id) {
     const c = D.courses.find((x) => x.id === id);
     if (!c) return shell('home', page('<section class="panel"><h1>Course not found</h1><p><a href="#home">Back to your dashboard</a></p></section>'));
@@ -380,7 +392,8 @@
     shell('home', page(`
       <div class="page-head"><a class="small" href="#home">← Dashboard</a>
         <p class="kicker dark">${esc(c.board)} · ${esc(c.qualification)}${c.code ? ' · ' + esc(c.code) : ''}${c.tier ? ' · ' + esc(c.tier) : ''}</p>
-        <h1>${esc(c.subject)}${st.id !== me.id ? ` <span class="for">for ${esc(st.full_name)}</span>` : ''}</h1></div>
+        <h1>${esc(c.subject)}${st.id !== me.id ? ` <span class="for">for ${esc(st.full_name)}</span>` : ''}</h1>
+        <div class="row"><a class="btn primary sm" href="#edit-${esc(c.id)}">Edit plan</a><a class="btn ghost sm" href="#timetable-${esc(c.student_id)}">Weekly timetable</a>${daysOf(c).length ? `<span class="muted small">Studied on ${daysOf(c).map((d) => DAYS[d - 1]).join(', ')}</span>` : ''}</div></div>
       <div class="stats">
         <div class="stat"><span>Exam</span><b>${fmt(c.exam_date, { day: 'numeric', month: 'short', year: 'numeric' })}</b></div>
         <div class="stat"><span>Weeks to go</span><b>${weeksUntil(c.exam_date)}</b></div>
@@ -389,7 +402,7 @@
       </div>
       <section class="panel"><div class="panel-head"><h2>Week-by-week plan</h2><div class="legend"><span><i class="dot kind-teach"></i>Teaching</span><span><i class="dot kind-review"></i>Review</span><span><i class="dot kind-revision"></i>Revision</span><span><i class="dot kind-break"></i>Break</span></div></div>
         <div class="timeline">${Object.keys(byMonth).map((k) => `<div class="month"><h3>${fmt(k + '-15', { month: 'long', year: 'numeric' })}</h3>
-          <ol>${byMonth[k].map((w) => { const now = w.start <= t && t < new Date(new Date(w.start + 'T12:00:00').getTime() + 7 * 864e5).toISOString().slice(0, 10); return `<li class="wk-row kind-${w.kind} ${now ? 'now' : ''}"><span class="wk-n">Wk ${w.n}</span><span class="wk-d">${fmt(w.start, { day: 'numeric', month: 'short' })}</span><span class="wk-t">${esc(w.title)}${now ? ' <span class="tag">This week</span>' : ''}</span></li>`; }).join('')}</ol></div>`).join('')}</div>
+          <ol>${byMonth[k].map((w) => { const now = w.start <= t && t < new Date(new Date(w.start + 'T12:00:00').getTime() + 7 * 864e5).toISOString().slice(0, 10); return `<li class="wk-row kind-${w.kind} ${now ? 'now' : ''}"><span class="wk-n">Wk ${w.n}</span><span class="wk-d">${fmt(w.start, { day: 'numeric', month: 'short' })}</span><span class="wk-t">${esc(w.title)}${now ? ' <span class="tag">This week</span>' : ''}${w.done ? ' <span class="tag ok">Done</span>' : ''}</span></li>`; }).join('')}</ol></div>`).join('')}</div>
       </section>
       <section class="panel danger-zone"><div class="panel-head"><div><h2>Remove this course</h2><p class="muted small">This deletes the plan. It can't be undone.</p></div><button class="btn danger sm" id="del">Remove course</button></div><div id="confirm"></div></section>`));
     document.getElementById('del').onclick = () => {
@@ -400,6 +413,79 @@
   }
 
   // ---------- course plan wizard ----------
+  function editCourse(id) {
+    const c = D.courses.find((x) => x.id === id);
+    if (!c) return shell('home', page('<section class="panel"><h1>Course not found</h1><p><a href="#home">Back to your dashboard</a></p></section>'));
+    const spec = C.SPECS.find((s) => s.code === c.code && s.board === c.board);
+    let plan = JSON.parse(JSON.stringify(c.plan || []));
+    const KINDS = { teach: 'Teaching', review: 'Review', revision: 'Revision', break: 'Break' };
+    const draw = (msg) => {
+      shell('home', page(`<div class="page-head"><a class="small" href="#course-${esc(c.id)}">← Back to the plan</a><p class="kicker dark">${esc(c.board)} · ${esc(c.qualification)}${c.code ? ' · ' + esc(c.code) : ''}</p><h1>Edit ${esc(c.subject)}</h1></div>
+        <section class="panel"><h2>Dates, tier and study time</h2><p class="muted small">Changing these rebuilds the plan from the start. Weeks you ticked as done stay ticked.</p>
+          <form id="basics" class="form two">
+            ${spec && spec.tiers ? `<label for="e-tier">Tier<select id="e-tier">${spec.tiers.map((t) => `<option ${t === c.tier ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>` : ''}
+            <label for="e-exam">First exam date<input id="e-exam" type="date" value="${esc(c.exam_date)}" required></label>
+            <label for="e-start">Start studying on<input id="e-start" type="date" value="${esc(c.start_date)}" required></label>
+            <label for="e-hours">Study time per week (hours)<input id="e-hours" type="number" min="0.5" max="20" step="0.5" value="${esc(c.hours_per_week)}" required></label>
+            <div><button class="btn primary">Save and rebuild the plan</button></div></form></section>
+        <section class="panel"><div class="panel-head"><div><h2>Weeks</h2><p class="muted small">Rename a week, change its type, move it up or down, or tick it when it's done. Then press Save weeks.</p></div><button class="btn primary sm" id="save-weeks">Save weeks</button></div>
+          <div id="e-msg">${msg || ''}</div>
+          <ol class="wk-edit">${plan.map((w, i) => `<li class="kind-${w.kind}"><span class="wk-n">Wk ${w.n}<small>${fmt(w.start, { day: 'numeric', month: 'short' })}</small></span>
+            <select data-kind="${i}" aria-label="Week ${w.n} type">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}" ${k === w.kind ? 'selected' : ''}>${v}</option>`).join('')}</select>
+            <input data-title="${i}" value="${esc(w.title)}" maxlength="140" aria-label="Week ${w.n} title">
+            <span class="wk-btns"><button class="btn ghost xs" data-up="${i}" ${i === 0 ? 'disabled' : ''} aria-label="Move week ${w.n} up">↑</button><button class="btn ghost xs" data-down="${i}" ${i === plan.length - 1 ? 'disabled' : ''} aria-label="Move week ${w.n} down">↓</button></span>
+            <label class="done-box"><input type="checkbox" data-done="${i}" ${w.done ? 'checked' : ''}> Done</label></li>`).join('')}</ol>
+          <div class="row" style="margin-top:12px"><button class="btn primary" id="save-weeks-2">Save weeks</button></div></section>`));
+      const grab = () => app.querySelectorAll('[data-title]').forEach((el) => { const w = plan[el.dataset.title]; w.title = el.value.trim() || w.title; w.kind = app.querySelector(`[data-kind="${el.dataset.title}"]`).value; w.done = app.querySelector(`[data-done="${el.dataset.title}"]`).checked; w.hours = w.kind === 'break' ? 0 : Number(c.hours_per_week); });
+      const swap = (a, b) => { grab(); const keep = ['start', 'n', 'done']; const A = plan[a]; const B = plan[b]; const ca = {}; const cb = {};
+        Object.keys(A).forEach((k) => { if (!keep.includes(k)) { ca[k] = A[k]; delete A[k]; } }); Object.keys(B).forEach((k) => { if (!keep.includes(k)) { cb[k] = B[k]; delete B[k]; } });
+        Object.assign(A, cb); Object.assign(B, ca); draw(); };
+      app.querySelectorAll('[data-up]').forEach((b) => { b.onclick = () => swap(Number(b.dataset.up) - 1, Number(b.dataset.up)); });
+      app.querySelectorAll('[data-down]').forEach((b) => { b.onclick = () => swap(Number(b.dataset.down), Number(b.dataset.down) + 1); });
+      const saveWeeks = async () => { grab(); try { await api.updateCourse(c.id, { plan }); c.plan = JSON.parse(JSON.stringify(plan)); draw('<p class="msg ok">Weeks saved.</p>'); } catch (x) { draw(`<p class="msg err">${esc(x.message)}</p>`); } };
+      document.getElementById('save-weeks').onclick = saveWeeks; document.getElementById('save-weeks-2').onclick = saveWeeks;
+      document.getElementById('basics').onsubmit = async (e) => {
+        e.preventDefault(); const v = (x) => document.getElementById(x) && document.getElementById(x).value;
+        const tier = v('e-tier') || c.tier; const exam = v('e-exam'); const start = v('e-start'); const hours = Number(v('e-hours'));
+        if (exam <= start) return draw('<p class="msg err">The exam date must be after the start date.</p>');
+        const topics = spec ? C.topicsFor(spec, tier) : [...new Set(plan.filter((w) => w.kind === 'teach').flatMap((w) => w.topics || [w.title]).map((t) => String(t).replace(/ \(practice\)$/, '')))];
+        const done = new Set(plan.filter((w) => w.done).map((w) => w.start));
+        const fresh = C.buildPlan({ start, exam, topics, hoursPerWeek: hours }).map((w) => (done.has(w.start) ? { ...w, done: true } : w));
+        try { await api.updateCourse(c.id, { tier: tier || '', exam_date: exam, start_date: start, hours_per_week: hours, plan: fresh });
+          Object.assign(c, { tier: tier || '', exam_date: exam, start_date: start, hours_per_week: hours, plan: fresh }); plan = JSON.parse(JSON.stringify(fresh)); draw('<p class="msg ok">Plan rebuilt and saved.</p>'); }
+        catch (x) { draw(`<p class="msg err">${esc(x.message)}</p>`); }
+      };
+    };
+    draw();
+  }
+  function timetablePage(sid) {
+    const st = person(sid); const cs = coursesOf(sid);
+    const draw = (msg) => {
+      const sel = Object.fromEntries(cs.map((c) => [c.id, daysOf(c)]));
+      shell('home', page(`<div class="page-head"><a class="small" href="#home">← Dashboard</a><p class="kicker dark">${st.id === me.id ? 'Your week' : esc(st.full_name)}</p><h1>Weekly timetable</h1>
+        <p class="muted">Tick the days each subject is studied. Each subject's weekly hours are shared across its days, and the totals show how busy each day is.</p></div>
+        ${cs.length ? `<section class="panel"><div id="t-msg">${msg || ''}</div><div class="scroll-x"><table class="data tt"><thead><tr><th>Subject</th>${DAYS.map((d) => `<th>${d}</th>`).join('')}<th>Per day</th></tr></thead><tbody>
+          ${cs.map((c) => `<tr><td><b>${esc(c.subject)}</b><small class="muted">${c.hours_per_week} h a week</small></td>${DAYS.map((d, i) => `<td><input type="checkbox" data-c="${esc(c.id)}" data-d="${i + 1}" ${sel[c.id].includes(i + 1) ? 'checked' : ''} aria-label="${esc(c.subject)} on ${DAYS_LONG[i]}"></td>`).join('')}<td class="muted small" data-per="${esc(c.id)}"></td></tr>`).join('')}
+          </tbody><tfoot><tr><th>Total</th>${DAYS.map((d, i) => `<td class="small" data-tot="${i + 1}"></td>`).join('')}<td></td></tr></tfoot></table></div>
+          <div class="row" style="margin-top:14px"><button class="btn primary" id="t-save">Save timetable</button><button class="btn ghost sm" id="t-even">Suggest days for me</button></div></section>`
+          : '<section class="panel"><p class="muted">Add a course first, then choose its days here.</p></section>'}`));
+      if (!cs.length) return;
+      const read = () => Object.fromEntries(cs.map((c) => [c.id, [...app.querySelectorAll(`[data-c="${c.id}"]:checked`)].map((x) => Number(x.dataset.d))]));
+      const sums = () => { const r = read(); const tot = [0, 0, 0, 0, 0, 0, 0, 0];
+        cs.forEach((c) => { const m = perDay({ ...c, study_days: r[c.id] }); app.querySelector(`[data-per="${c.id}"]`).textContent = r[c.id].length ? mins(m) : 'Any day'; r[c.id].forEach((d) => { tot[d] += m; }); });
+        for (let d = 1; d <= 7; d++) { const el = app.querySelector(`[data-tot="${d}"]`); el.textContent = tot[d] ? mins(tot[d]) : ''; el.className = 'small' + (tot[d] > 150 ? ' warn-t' : ''); } };
+      app.querySelectorAll('[data-c]').forEach((x) => { x.onchange = sums; }); sums();
+      document.getElementById('t-even').onclick = () => {
+        // Spread subjects over Mon-Fri: about one study day per 45 minutes a week, rotating the start day.
+        let k = 0; cs.forEach((c) => { const n = Math.min(5, Math.max(1, Math.round(Number(c.hours_per_week) * 60 / 45)));
+          const days = []; for (let j = 0; j < n; j++) days.push(((k + Math.round(j * 5 / n)) % 5) + 1); k += 1;
+          app.querySelectorAll(`[data-c="${c.id}"]`).forEach((x) => { x.checked = days.includes(Number(x.dataset.d)); }); }); sums(); };
+      document.getElementById('t-save').onclick = async (e) => { const b = e.target; b.disabled = true; b.textContent = 'Saving…'; const r = read();
+        try { for (const c of cs) { if (JSON.stringify(daysOf(c)) !== JSON.stringify(r[c.id])) { await api.updateCourse(c.id, { study_days: r[c.id] }); c.study_days = r[c.id]; } } draw('<p class="msg ok">Timetable saved. It now shows day by day under This week on the dashboard.</p>'); }
+        catch (x) { draw(`<p class="msg err">${esc(x.message)}</p>`); } };
+    };
+    draw();
+  }
   function wizard(studentId, st) {
     st = st || { step: 1 };
     const student = person(studentId);
@@ -552,7 +638,7 @@
   function childCard(ch) {
     const cs = coursesOf(ch.id);
     const studyHere = study.role === 'admin' && ch.id === (study.studentId() || childrenOf(me.id)[0].id);
-    return `<article class="person-card"><div class="pc-head"><span class="avatar lg">${esc(initials(ch.full_name))}</span><div><h3>${esc(ch.full_name)}</h3><span class="muted small">${cs.length} course${cs.length === 1 ? '' : 's'}</span></div><a class="btn primary sm" href="#plan-for-${esc(ch.id)}">Add a course</a></div>
+    return `<article class="person-card"><div class="pc-head"><span class="avatar lg">${esc(initials(ch.full_name))}</span><div><h3>${esc(ch.full_name)}</h3><span class="muted small">${cs.length} course${cs.length === 1 ? '' : 's'}</span></div><div class="row"><a class="btn ghost sm" href="#timetable-${esc(ch.id)}">Weekly timetable</a><a class="btn primary sm" href="#plan-for-${esc(ch.id)}">Add a course</a></div></div>
       ${studyHere ? study.dashBlock() : ''}${overview(cs)}
       ${cs.length ? `<div class="course-grid">${cs.map((c) => courseCard(c)).join('')}</div>` : '<p class="muted small">No courses yet.</p>'}</article>`;
   }
@@ -745,6 +831,8 @@
       if (route === 'boards') return boardsPage();
       if (route.startsWith('course-')) return coursePage(route.slice(7));
       if (route.startsWith('plan-for-')) return wizard(route.slice(9));
+      if (route.startsWith('edit-')) return editCourse(route.slice(5));
+      if (route.startsWith('timetable-')) return timetablePage(route.slice(10));
       if (route === 'invites') return invitesPage();
       if (route === 'account') return accountPage();
       if (route === 'everyone' && me.is_platform_admin) return everyonePage();
