@@ -29,11 +29,11 @@ recall questions; the full answer sheets never are.
 
 ## Version 2 (test): schools, teachers, parents and students
 
-`docs/app/` is a separate, invite-only version served at `/app/`. It uses the same Supabase project
+The main site (`docs/`) is the invite-only multi-role version, served at the site root (https://ninegrade.co.uk). The original single-family site is at `docs/classic/` (`/classic/`); `/app/` redirects to the root. It uses the same Supabase project
 with its own tables, so the site above is unaffected.
 
 - Landing page, sign in, sign up as School, Teacher, Parent or Student, and My account (name, email, password, forgotten password).
-- Course plans: choose exam board, qualification, subject and code, tier and exam date; `docs/app/catalogue.js`
+- Course plans: choose exam board, qualification, subject and code, tier and exam date; `docs/catalogue.js`
   holds the specifications and builds the week-by-week plan (review weeks, revision, school holidays).
 - Dashboards: students see this week and their courses; parents manage their children; teachers run classes;
   school admins see staff, classes and students; the owner sees everyone.
@@ -47,7 +47,7 @@ with its own tables, so the site above is unaffected.
    `select public.v2_add_person('child-email', 'student', 'Name');`
    `select public.v2_link_parent('email', 'child-email');`
 3. Authentication: turn on "Allow new users to sign up". Every sign-up still needs a valid invite code,
-   checked in the database. Set Site URL and Redirect URLs to the `/app/` address for email links.
+   checked in the database. Set Site URL and Redirect URLs to the site root for email links.
 4. Invite codes are made on the Invite codes page: the owner can invite any account type; a school admin
    invites teachers; a teacher makes one code per class; a parent invites their child. Codes expire after 30 days.
 
