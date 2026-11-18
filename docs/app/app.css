@@ -59,6 +59,11 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .nav a { padding: 8px 12px; border-radius: 8px; color: var(--ink-2); text-decoration: none; font-weight: 500; white-space: nowrap; }
 .nav a[aria-current] { background: var(--surface-2); color: var(--ink); font-weight: 700; }
 .me { display: flex; align-items: center; gap: 10px; }
+.me-link { display: flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; border-radius: 10px; padding: 2px 6px 2px 2px; }
+.me-link:hover, .me-link[aria-current] { background: var(--surface-2); }
+.bar-dark .me-link:hover { background: rgba(255,255,255,.08); }
+.account-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; align-items: start; }
+.account-grid .panel { margin: 0; }
 .me-name { display: flex; flex-direction: column; font-weight: 600; font-size: .9rem; line-height: 1.2; }
 .me-name small { color: var(--muted); font-weight: 400; }
 .avatar { width: 36px; height: 36px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; background: var(--surface-2); color: var(--primary); font-weight: 700; font-size: .85rem; border: 1px solid var(--line); }

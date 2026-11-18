@@ -43,6 +43,10 @@
         return { needsConfirm: !data.session };
       },
       async signOut() { await sb.auth.signOut(); },
+      async updateName(id, full_name) { must(await sb.from('people').update({ full_name }).eq('id', id)); },
+      async updateEmail(email) { const { error } = await sb.auth.updateUser({ email }, { emailRedirectTo: location.href.split('#')[0] }); if (error) throw new Error(error.message); return { needsConfirm: true }; },
+      async updatePassword(password) { const { error } = await sb.auth.updateUser({ password }); if (error) throw new Error(/different from the old/i.test(error.message) ? 'The new password must be different from the old one.' : error.message); },
+      async resetPassword(email) { const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.href.split('#')[0] }); if (error) throw new Error(/rate limit/i.test(error.message) ? 'Too many emails sent. Please try again in an hour.' : error.message); },
       async load() {
         const [people, schools, members, classes, classStudents, guardianships, courses, invites] = await Promise.all([
           all('people'), all('schools'), all('school_members'), all('classes'), all('class_students'), all('guardianships'),
@@ -114,6 +118,10 @@
         return { needsConfirm: false };
       },
       async signOut() { meId = null; store.del(KEY + '-me'); },
+      async updateName(id, full_name) { me().full_name = full_name; save(); },
+      async updateEmail(email) { me().email = email; save(); return { needsConfirm: false }; },
+      async updatePassword() { },
+      async resetPassword() { },
       async load() {
         const m = me();
         const myClasses = S.classes.filter((c) => c.teacher_id === m.id || m.is_platform_admin || S.members.some((x) => x.person_id === m.id && x.role === 'admin' && x.school_id === c.school_id) || S.classStudents.some((x) => x.class_id === c.id && x.student_id === m.id));
@@ -136,6 +144,7 @@
     };
   }
 
+  const recovering = /type=recovery/.test(location.hash);
   const api = cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase && !/[?&]preview/.test(location.search) ? supabaseApi() : demoApi();
   let me = null; let D = null;
 
@@ -161,7 +170,7 @@
       <header class="bar ${opts.dark ? 'bar-dark' : ''}"><div class="bar-in">
         <a class="logo" href="#${me ? 'home' : ''}"><span class="logo-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 18V7l8-4 8 4v11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M9 21v-6h6v6" fill="none" stroke="currentColor" stroke-width="2.2"/></svg></span>GCSE Study</a>
         ${nav.length ? `<nav class="nav" aria-label="Main">${nav.map(([r, t]) => `<a href="#${r}" ${route === r ? 'aria-current="page"' : ''}>${t}</a>`).join('')}</nav>` : '<span class="grow"></span>'}
-        ${me ? `<div class="me"><span class="avatar" aria-hidden="true">${esc(initials(me.full_name))}</span><span class="me-name">${esc(me.full_name)}<small>${me.role ? ROLE[me.role] : ''}${me.is_platform_admin ? ' · owner' : ''}${api.demo ? ' · preview' : ''}</small></span><button class="btn ghost sm" id="signout">Sign out</button></div>`
+        ${me ? `<div class="me"><a class="me-link" href="#account" title="My account" ${route === 'account' ? 'aria-current="page"' : ''}><span class="avatar" aria-hidden="true">${esc(initials(me.full_name))}</span><span class="me-name">${esc(me.full_name)}<small>${me.role ? ROLE[me.role] : ''}${me.is_platform_admin ? ' · owner' : ''}${api.demo ? ' · preview' : ''}</small></span></a><button class="btn ghost sm" id="signout">Sign out</button></div>`
           : `<div class="me"><a class="btn ghost sm" href="#signin">Sign in</a><a class="btn accent sm" href="#signup">Get started</a></div>`}
       </div></header>
       ${inner}
@@ -236,6 +245,7 @@
             ${err ? `<p class="msg err">${esc(err)}</p>` : ''}
             <button class="btn primary lg" id="go">Sign in</button>
           </form>`}
+        ${api.demo ? '' : '<p class="small"><a href="#forgot">Forgot your password?</a></p>'}
         <p class="small muted">New here? <a href="#signup">Create an account with an invite code</a></p>
       </div></div>`));
     if (api.demo) {
@@ -527,6 +537,32 @@
       </tbody></table></div></section>`));
   }
 
+  // ---------- my account ----------
+  function accountPage(o = {}) {
+    shell('account', page(`<div class="page-head"><a class="small" href="#home">← Dashboard</a><p class="kicker dark">${ROLE[me.role] || ''}</p><h1>My account</h1></div>
+      ${o.recovery ? '<p class="msg ok">You\'re signed in from the reset link. Choose a new password below.</p>' : ''}
+      <div class="account-grid">
+        <section class="panel"><h2>Name</h2><form id="f-name" class="form"><label for="a-name">Full name<input id="a-name" required maxlength="80" autocomplete="name" value="${esc(me.full_name)}"></label><button class="btn primary">Save name</button><div class="out"></div></form></section>
+        <section class="panel"><h2>Email</h2><form id="f-email" class="form"><label for="a-email">Email address<input id="a-email" type="email" required autocomplete="email" value="${esc(me.email || '')}"></label>${api.demo ? '' : '<p class="muted small">We\'ll email a link to confirm the change. Your old email works until then.</p>'}<button class="btn primary">Change email</button><div class="out"></div></form></section>
+        <section class="panel" id="pw-panel"><h2>Password</h2><form id="f-pw" class="form"><label for="a-pw">New password <small>at least 8 characters</small><input id="a-pw" type="password" minlength="8" required autocomplete="new-password"></label><label for="a-pw2">Type it again<input id="a-pw2" type="password" minlength="8" required autocomplete="new-password"></label><button class="btn primary">Change password</button><div class="out"></div></form></section>
+      </div>`));
+    if (o.recovery) document.getElementById('a-pw').focus();
+    const wire = (id, fn) => { const f = document.getElementById(id); f.onsubmit = async (e) => { e.preventDefault(); const b = f.querySelector('button'); const out = f.querySelector('.out'); b.disabled = true; out.innerHTML = '';
+      try { const m = await fn(); out.innerHTML = `<p class="msg ok">${esc(m)}</p>`; } catch (x) { out.innerHTML = `<p class="msg err">${esc(x.message)}</p>`; } b.disabled = false; }; };
+    wire('f-name', async () => { const n = document.getElementById('a-name').value.trim(); await api.updateName(me.id, n); me.full_name = n; const nm = app.querySelector('.me-name'); if (nm) nm.firstChild.textContent = n; return 'Name saved.'; });
+    wire('f-email', async () => { const e = document.getElementById('a-email').value.trim(); if (e === me.email) throw new Error('That is already your email.'); const r = await api.updateEmail(e); if (!r.needsConfirm) me.email = e; return r.needsConfirm ? `Check ${e} for a link to confirm the change.` : 'Email changed.'; });
+    wire('f-pw', async () => { const a = document.getElementById('a-pw').value; if (a !== document.getElementById('a-pw2').value) throw new Error('The two passwords don\'t match.'); await api.updatePassword(a); document.getElementById('f-pw').reset(); return 'Password changed.'; });
+  }
+  function forgotView() {
+    shell('signin', page(`<div class="auth"><div class="auth-card"><p class="kicker dark">Sign in help</p><h1>Reset your password</h1>
+      <p class="muted">Enter your email and we'll send a link to choose a new password.</p>
+      <form id="f" class="form"><label for="email">Email<input id="email" type="email" required autocomplete="username"></label><button class="btn primary lg" id="go">Send reset link</button><div class="out"></div></form>
+      <p class="small"><a href="#signin">Back to sign in</a></p></div></div>`));
+    document.getElementById('f').onsubmit = async (e) => { e.preventDefault(); const b = document.getElementById('go'); const out = e.target.querySelector('.out'); b.disabled = true;
+      try { await api.resetPassword(document.getElementById('email').value.trim()); out.innerHTML = '<p class="msg ok">If that email has an account, a reset link is on its way. Check your inbox and spam folder.</p>'; }
+      catch (x) { out.innerHTML = `<p class="msg err">${esc(x.message)}</p>`; b.disabled = false; } };
+  }
+
   // ---------- router ----------
   async function load() { D = await api.load(); return D; }
   async function render() {
@@ -536,15 +572,18 @@
       if (!me) {
         if (route === 'signin') return signInView();
         if (route === 'signup') return signUpView();
+        if (route === 'forgot') return forgotView();
         return landing();
       }
       if (!me.role) return shell('', page('<section class="panel"><h1>Almost there</h1><p>This login isn\'t set up for the new site yet. Ask the site owner to add it.</p></section>'));
       await load();
+      if (recovering && !window.__recoveryShown) { window.__recoveryShown = true; history.replaceState(null, '', location.pathname + location.search + '#account'); return accountPage({ recovery: true }); }
       if (route === '' || route === 'signin' || route === 'signup') { location.replace('#home'); return; }
       if (route === 'welcome') return landing();
       if (route.startsWith('course-')) return coursePage(route.slice(7));
       if (route.startsWith('plan-for-')) return wizard(route.slice(9));
       if (route === 'invites') return invitesPage();
+      if (route === 'account') return accountPage();
       if (route === 'everyone' && me.is_platform_admin) return everyonePage();
       if (me.role === 'student') return studentHome();
       if (me.role === 'parent') return parentHome();
