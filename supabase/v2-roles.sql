@@ -147,6 +147,8 @@ begin
   return new;
 end $$;
 
+alter table public.invites add column if not exists used_by uuid[] not null default '{}';
+
 create or replace function public.v2_setup_person() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare inv public.invites; code_in text; sch uuid;
@@ -155,7 +157,7 @@ begin
   if code_in = '' then return new; end if;
   select * into inv from public.invites where code = code_in for update;
   if inv.code is null then return new; end if;
-  update public.invites set uses = uses + 1 where code = code_in;
+  update public.invites set uses = uses + 1, used_by = array_append(used_by, new.id) where code = code_in;
   insert into public.people (id, full_name, role)
   values (new.id, left(coalesce(new.raw_user_meta_data->>'full_name', ''), 80), inv.role)
   on conflict (id) do nothing;

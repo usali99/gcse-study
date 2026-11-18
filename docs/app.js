@@ -65,6 +65,7 @@
       async updateCourse(id, patch) { const r = await sb.from('courses').update(patch).eq('id', id); if (r.error) throw new Error(/study_days/.test(r.error.message) ? 'Study days need a quick database update first. Ask the site owner to run v2-timetable.sql.' : r.error.message); },
       async deleteCourse(id) { must(await sb.from('courses').delete().eq('id', id)); },
       async addInvite(i) { must(await sb.from('invites').insert(i)); },
+      async setInviteNote(code, note) { const r = await sb.from('invites').update({ note }).eq('code', code); if (r.error) throw new Error(/permission|denied/i.test(r.error.message) ? 'Notes need a quick database update first (v2-invite-names.sql).' : r.error.message); },
       async createChild({ full_name, username, password, parent_id }) {
         const code = newCode();
         must(await sb.from('invites').insert({ code, role: 'student', parent_id, max_uses: 1, note: 'Login for ' + full_name.slice(0, 60), expires_at: new Date(Date.now() + 864e5).toISOString() }));
@@ -133,7 +134,7 @@
         const inv = S.invites.find((i) => i.code === String(invite_code || '').trim().toUpperCase());
         if (!inv || inv.uses >= inv.max_uses) throw new Error('That invite code is not valid or has already been used.');
         inv.uses++;
-        const id = uid();
+        const id = uid(); inv.used_by = [...(inv.used_by || []), id];
         S.people.push({ id, full_name, role: inv.role, is_platform_admin: false, email });
         if (inv.role === 'school_admin') { const sid = uid(); S.schools.push({ id: sid, name: school_name || 'My school' }); S.members.push({ school_id: sid, person_id: id, role: 'admin' }); }
         if (inv.role === 'teacher' && inv.school_id) S.members.push({ school_id: inv.school_id, person_id: id, role: 'teacher' });
@@ -172,6 +173,7 @@
         const id = uid(); S.people.push({ id, full_name, role: 'student', is_platform_admin: false, email: childEmail(username) }); S.guardianships.push({ parent_id, student_id: id }); save();
       },
       async setChildPassword() { },
+      async setInviteNote(code, note) { S.invites.forEach((x) => { if (x.code === code) x.note = note; }); save(); },
       async addInvite(i) { S.invites.unshift({ ...i, uses: 0, created_by: meId, created_at: new Date().toISOString() }); save(); },
       async deleteInvite(code) { S.invites = S.invites.filter((i) => i.code !== code); save(); },
       async addClass(c) { S.classes.push({ ...c, id: uid() }); save(); },
@@ -628,7 +630,7 @@
     if (!list.length) return '<p class="muted small">No codes yet.</p>';
     return `<div class="scroll-x"><table class="data"><thead><tr><th>Code</th><th>For</th><th>Used</th><th>Expires</th><th></th></tr></thead><tbody>
       ${list.map((i) => `<tr><td><code class="code">${esc(i.code)}</code> <button class="btn ghost xs" data-copy="${esc(i.code)}">Copy</button></td>
-        <td>${ROLE[i.role]}${i.class_id ? ` · ${esc((D.classes.find((c) => c.id === i.class_id) || {}).name || 'class')}` : ''}${i.parent_id ? ' · linked to you' : ''}${i.school_id ? ' · your school' : ''}${i.note ? `<br><span class="muted small">${esc(i.note)}</span>` : ''}</td>
+        <td>${ROLE[i.role]}${i.class_id ? ` · ${esc((D.classes.find((c) => c.id === i.class_id) || {}).name || 'class')}` : ''}${i.parent_id ? ' · linked to you' : ''}${i.school_id ? ' · your school' : ''}<br><span class="note-line" data-note-for="${esc(i.code)}">${i.note ? `<span class="small"><b>${esc(i.note)}</b></span> ` : ''}<button type="button" class="linkish small" data-edit-note="${esc(i.code)}" data-note="${esc(i.note || '')}">${i.note ? 'Edit note' : 'Add a note: who is it for?'}</button></span>${(i.used_by || []).length ? `<br><span class="small used-by">Used by ${(i.used_by || []).map((u) => esc(person(u).full_name)).join(', ')}</span>` : ''}</td>
         <td class="num">${i.uses} / ${i.max_uses}</td><td>${fmt(i.expires_at.slice(0, 10), { day: 'numeric', month: 'short' })}</td>
         <td><button class="btn ghost xs" data-del-code="${esc(i.code)}">Delete</button></td></tr>`).join('')}</tbody></table></div>`;
   }
@@ -643,6 +645,12 @@
       };
     });
     app.querySelectorAll('[data-copy]').forEach((b) => { b.onclick = () => { navigator.clipboard.writeText(b.dataset.copy).then(() => { b.textContent = 'Copied'; }, () => { b.textContent = 'Select it'; }); }; });
+    app.querySelectorAll('[data-edit-note]').forEach((b) => { b.onclick = () => {
+      const code = b.dataset.editNote; const line = app.querySelector(`[data-note-for="${code}"]`);
+      line.innerHTML = `<form class="note-form row"><input maxlength="80" value="${esc(b.dataset.note)}" placeholder="e.g. Hamza (parent)" aria-label="Note for code ${esc(code)}"><button class="btn primary xs">Save</button></form>`;
+      const f = line.querySelector('form'); f.querySelector('input').focus();
+      f.onsubmit = async (e) => { e.preventDefault(); try { await api.setInviteNote(code, f.querySelector('input').value.trim()); await load(); rerender(); } catch (x) { flash(x.message, true); } };
+    }; });
     app.querySelectorAll('[data-del-code]').forEach((b) => { b.onclick = async () => { await api.deleteInvite(b.dataset.delCode); await load(); rerender(); }; });
   }
   function flash(text, bad) { const f = document.getElementById('flash'); if (f) { f.innerHTML = `<p class="msg ${bad ? 'err' : 'ok'}">${esc(text)}</p>`; f.scrollIntoView({ block: 'nearest' }); } }
