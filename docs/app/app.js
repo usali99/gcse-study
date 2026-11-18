@@ -203,7 +203,7 @@
       <section class="band">
         <h2 class="section-title">Everything a GCSE year needs, in one place</h2>
         <div class="features">
-          ${[['plan', 'Course plans in minutes', 'Exam board, subject, code and exam date in. A week-by-week plan to the exam out, with review weeks and revision built in.'],
+          ${[['plan', 'Course plans in minutes', 'Exam board, subject, specification code and exam date in. A week-by-week plan to the exam out, with review weeks and revision built in.'],
             ['quiz', 'Quizzes that mark themselves', 'Every lesson opens with a quick memory quiz. Answers are checked instantly, so gaps show up the same day.'],
             ['mark', 'Written work, properly marked', 'Students type answers or upload a photo of their page. Work is marked to the board\'s mark scheme style, with feedback.'],
             ['track', 'Progress everyone can see', 'Weak topics, scores and time taken, by subject. Parents and teachers see the same picture as the student.']]
@@ -224,7 +224,7 @@
         <h2 class="section-title">How it works</h2>
         <ol class="steps">
           <li><b>Join with an invite code</b><span>Choose School, Teacher, Parent or Student.</span></li>
-          <li><b>Create a course plan</b><span>Answer five questions: board, qualification, subject, code and exam date.</span></li>
+          <li><b>Create a course plan</b><span>Answer five questions: board, qualification, subject, specification code and exam date.</span></li>
           <li><b>Work through it weekly</b><span>Short lessons, quizzes and marked practice, adjusted to what was hard last week.</span></li>
         </ol>
         <div class="cta center"><a class="btn primary lg" href="#signup">Create an account</a></div>
@@ -311,7 +311,7 @@
   function coursesBlock(sid, title, canAdd) {
     const cs = coursesOf(sid);
     return `<section class="panel"><div class="panel-head"><h2>${title}</h2>${canAdd ? `<a class="btn primary sm" href="#plan-for-${esc(sid)}">Add a course</a>` : ''}</div>
-      ${cs.length ? `<div class="course-grid">${cs.map((c) => courseCard(c)).join('')}</div>` : `<div class="empty"><b>No courses yet.</b><span>A course plan takes about a minute: board, subject, code and exam date.</span>${canAdd ? `<a class="btn primary sm" href="#plan-for-${esc(sid)}">Create the first plan</a>` : ''}</div>`}
+      ${cs.length ? `<div class="course-grid">${cs.map((c) => courseCard(c)).join('')}</div>` : `<div class="empty"><b>No courses yet.</b><span>A course plan takes about a minute: board, subject, specification code and exam date.</span>${canAdd ? `<a class="btn primary sm" href="#plan-for-${esc(sid)}">Create the first plan</a>` : ''}</div>`}
     </section>`;
   }
   function thisWeekBlock(sid) {
@@ -365,7 +365,7 @@
       <div class="opt-grid">${specs.map((s) => `<button class="opt" data-k="code" data-v="${esc(s.code)}"><b>${esc(s.subject)}</b><small>${esc(s.code)}</small></button>`).join('')}</div>
       <details class="other"><summary>My subject isn't listed</summary><form id="other" class="form">
         <label for="osub">Subject name<input id="osub" required maxlength="60"></label>
-        <label for="ocode">Exam code (from the board's website)<input id="ocode" maxlength="12"></label>
+        <label for="ocode">Specification code <small>on the board's website, e.g. 1MA1 or 8300</small><input id="ocode" maxlength="12"></label>
         <label for="otopics">Topics, one per line (optional, you can add them later)<textarea id="otopics" rows="5"></textarea></label>
         <button class="btn primary">Continue</button></form></details>`;
     if (st.step === 4) body = `<h2>When is the exam?</h2>
