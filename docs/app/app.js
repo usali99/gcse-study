@@ -182,7 +182,7 @@
       <header class="bar ${opts.dark ? 'bar-dark' : ''}"><div class="bar-in">
         <a class="logo" href="#${me ? 'home' : ''}"><span class="logo-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 18V7l8-4 8 4v11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M9 21v-6h6v6" fill="none" stroke="currentColor" stroke-width="2.2"/></svg></span>GCSE Study</a>
         ${nav.length ? `<nav class="nav" aria-label="Main">${nav.map(([r, t]) => `<a href="#${r}" ${route === r ? 'aria-current="page"' : ''}>${t}</a>`).join('')}</nav>` : '<span class="grow"></span>'}
-        ${me ? `<div class="me"><a class="me-link" href="#account" title="My account" ${route === 'account' ? 'aria-current="page"' : ''}><span class="avatar" aria-hidden="true">${esc(initials(me.full_name))}</span><span class="me-name">${esc(me.full_name)}<small>${me.role ? ROLE[me.role] : ''}${me.is_platform_admin ? ' · owner' : ''}${api.demo ? ' · preview' : ''}</small></span></a><button class="btn ghost sm" id="signout">Sign out</button></div>`
+        ${me ? `<div class="me"><a class="me-link" href="#account" title="My account" ${route === 'account' ? 'aria-current="page"' : ''}><span class="avatar" aria-hidden="true">${esc(initials(me.full_name))}</span><span class="me-name">${esc(me.full_name)}<small>${me.is_platform_admin && D && !childrenOf(me.id).length ? 'Owner' : `${me.role ? ROLE[me.role] : ''}${me.is_platform_admin ? ' · owner' : ''}`}${api.demo ? ' · preview' : ''}</small></span></a><button class="btn ghost sm" id="signout">Sign out</button></div>`
           : `<div class="me"><a class="btn ghost sm" href="#signin">Sign in</a><a class="btn accent sm" href="#signup">Get started</a></div>`}
       </div></header>
       ${inner}
@@ -515,7 +515,7 @@
         + inviteBox({ title: 'Student (on their own)', desc: 'A student who plans and studies by themselves.', role: 'student' });
     }
     if (school && school.myRole === 'admin') boxes += inviteBox({ title: 'Teacher at ' + esc(school.name), desc: 'Joins your school as a teacher.', role: 'teacher', extra: { school_id: school.id } });
-    if (me.role === 'parent') boxes += inviteBox({ title: 'Your child', desc: 'Your child signs up with this code and is linked to you.', role: 'student', extra: { parent_id: me.id } });
+    if (me.role === 'parent' && !(me.is_platform_admin && !childrenOf(me.id).length)) boxes += inviteBox({ title: 'Your child', desc: 'Your child signs up with this code and is linked to you.', role: 'student', extra: { parent_id: me.id } });
     D.classes.filter((c) => c.teacher_id === me.id).forEach((c) => { boxes += inviteBox({ title: 'Students for ' + esc(c.name), desc: 'One code for the whole class (up to 40 students).', role: 'student', extra: { class_id: c.id }, maxUses: 40 }); });
     shell('invites', page(`
       <div class="page-head"><p class="kicker dark">Invite only</p><h1>Invite codes</h1><p class="muted">Each code works for one kind of account and expires after 30 days. Nobody can join without one.</p></div>
@@ -555,6 +555,16 @@
     return `<article class="person-card"><div class="pc-head"><span class="avatar lg">${esc(initials(ch.full_name))}</span><div><h3>${esc(ch.full_name)}</h3><span class="muted small">${cs.length} course${cs.length === 1 ? '' : 's'}</span></div><a class="btn primary sm" href="#plan-for-${esc(ch.id)}">Add a course</a></div>
       ${studyHere ? study.dashBlock() : ''}${overview(cs)}
       ${cs.length ? `<div class="course-grid">${cs.map((c) => courseCard(c)).join('')}</div>` : '<p class="muted small">No courses yet.</p>'}</article>`;
+  }
+  function ownerHome() {
+    const by = (r) => D.people.filter((p) => p.role === r && !p.is_platform_admin).length;
+    const open = (D.requests || []).filter((r) => r.status === 'new').length;
+    const sid = study.role === 'admin' ? study.studentId() : null; const st = sid ? person(sid) : null;
+    shell('home', page(`${head('You run the site. Here is everyone on it, and anything waiting for you.')}
+      <div class="stats"><div class="stat"><span>Schools</span><b>${D.schools.length}</b></div><div class="stat"><span>Teachers</span><b>${by('teacher')}</b></div><div class="stat"><span>Parents</span><b>${by('parent')}</b></div><div class="stat"><span>Students</span><b>${by('student')}</b></div></div>
+      <section class="panel"><div class="panel-head"><div><h2>Invite requests</h2><p class="muted small">${open ? `${open} waiting for a reply.` : 'Nothing waiting.'}</p></div><a class="btn ${open ? 'primary' : 'ghost'} sm" href="#invites">Invite codes and requests${open ? ` <span class="count">${open}</span>` : ''}</a></div></section>
+      ${study.role === 'admin' ? `<section class="panel"><div class="panel-head"><h2>${st ? esc(st.full_name) + "'s study" : 'Study'}</h2></div>${study.dashBlock()}</section>` : ''}
+      <section class="panel slim"><div class="panel-head"><div><h2>Everyone</h2><p class="muted small">${D.people.length} accounts, ${D.courses.length} course plans.</p></div><a class="btn ghost sm" href="#everyone">See everyone</a></div></section>`));
   }
   function parentHome() {
     const kids = childrenOf(me.id);
@@ -740,6 +750,7 @@
       if (route === 'everyone' && me.is_platform_admin) return everyonePage();
       if (await study.route(route)) return;
       if (me.role === 'student') return studentHome();
+      if (me.is_platform_admin && !childrenOf(me.id).length && !coursesOf(me.id).length) return ownerHome();
       if (me.role === 'parent') return parentHome();
       if (me.role === 'teacher') return teacherHome();
       if (me.role === 'school_admin') return schoolHome();
