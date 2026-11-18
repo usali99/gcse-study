@@ -52,13 +52,18 @@
           all('people'), all('schools'), all('school_members'), all('classes'), all('class_students'), all('guardianships'),
           all('courses', (q) => q.order('exam_date')), all('invites', (q) => q.order('created_at', { ascending: false })),
         ]);
-        return { people, schools, members, classes, classStudents, guardianships, courses, invites };
+        let requests = [];
+        const { data: ses } = await sb.auth.getSession(); if (people.some((x) => x.is_platform_admin && ses.session && x.id === ses.session.user.id)) { try { requests = await all('invite_requests', (q) => q.order('created_at', { ascending: false })); } catch (e) { requests = []; } }
+        return { people, schools, members, classes, classStudents, guardianships, courses, invites, requests };
       },
       async addCourse(c) { must(await sb.from('courses').insert(c)); },
       async deleteCourse(id) { must(await sb.from('courses').delete().eq('id', id)); },
       async addInvite(i) { must(await sb.from('invites').insert(i)); },
       async deleteInvite(code) { must(await sb.from('invites').delete().eq('code', code)); },
       async addClass(c) { must(await sb.from('classes').insert(c)); },
+      async requestInvite(r) { const { error } = await sb.from('invite_requests').insert(r); if (error) throw new Error(/already have a request|Too many/.test(error.message) ? error.message : /does not exist|schema cache/.test(error.message) ? 'Requests are not switched on yet. Please try again later.' : 'Something went wrong. Please check your details and try again.'); },
+      async setRequest(id, status) { must(await sb.from('invite_requests').update({ status }).eq('id', id)); },
+      async deleteRequest(id) { must(await sb.from('invite_requests').delete().eq('id', id)); },
     };
   }
 
@@ -81,6 +86,7 @@
         courses: [course('c1', 'hadi', '1MA1', 'Foundation', '2028-05-15', 1), course('c2', 'hadi', '1EN2', '', '2028-05-15', 3),
           course('c3', 'hadi', '1PH0', 'Foundation', '2028-05-15', 1), course('c4', 'hadi', '1CH0', 'Foundation', '2028-05-15', 1),
           course('c5', 'amira', '8300', 'Higher', '2027-05-15', 2), course('c6', 'leo', '8300', 'Foundation', '2027-05-15', 2), course('c7', 'sam', '8463', 'Higher', '2028-05-15', 2)],
+        requests: [{ id: 'rq1', full_name: 'Jo Example', email: 'jo@example.com', role: 'parent', note: 'Home-educating two children, GCSE in 2028.', status: 'new', created_at: '2026-11-18T09:00:00Z' }],
         invites: [{ code: 'TRYPARENT', role: 'parent', note: 'Example code', max_uses: 50, uses: 0, created_by: 'usman', expires_at: '2027-12-31T00:00:00Z', created_at: '2026-11-17T20:00:00Z' },
           { code: 'TRYSCHOOL', role: 'school_admin', note: 'Example code', max_uses: 50, uses: 0, created_by: 'usman', expires_at: '2027-12-31T00:00:00Z', created_at: '2026-11-17T20:00:00Z' }],
       };
@@ -134,6 +140,7 @@
           guardianships: S.guardianships.filter((g) => g.parent_id === m.id || g.student_id === m.id || m.is_platform_admin),
           courses: S.courses.filter((c) => canManage(c.student_id)).sort((a, b) => a.exam_date.localeCompare(b.exam_date)),
           invites: S.invites.filter((i) => i.created_by === m.id || m.is_platform_admin),
+          requests: m.is_platform_admin ? (S.requests || []) : [],
         };
       },
       async addCourse(c) { if (!canManage(c.student_id)) throw new Error('You can only plan courses for your own students.'); S.courses.push({ ...c, id: uid(), created_at: new Date().toISOString() }); save(); },
@@ -141,6 +148,9 @@
       async addInvite(i) { S.invites.unshift({ ...i, uses: 0, created_by: meId, created_at: new Date().toISOString() }); save(); },
       async deleteInvite(code) { S.invites = S.invites.filter((i) => i.code !== code); save(); },
       async addClass(c) { S.classes.push({ ...c, id: uid() }); save(); },
+      async requestInvite(r) { S.requests = S.requests || []; if (S.requests.some((x) => x.email === r.email.toLowerCase())) throw new Error('We already have a request from this email. We\'ll be in touch soon.'); S.requests.unshift({ ...r, email: r.email.toLowerCase(), id: uid(), status: 'new', created_at: new Date().toISOString() }); save(); },
+      async setRequest(id, status) { (S.requests || []).forEach((x) => { if (x.id === id) x.status = status; }); save(); },
+      async deleteRequest(id) { S.requests = (S.requests || []).filter((x) => x.id !== id); save(); },
     };
   }
 
@@ -230,7 +240,7 @@
           <h1>A clear plan from today to the exam hall.</h1>
           <p class="lede">Pick the exam board, subject and specification code. GCSE Study builds a week-by-week plan to the exam, then turns each week into short lessons, self-marking quizzes and marked practice.</p>
           <div class="cta"><a class="btn accent lg" href="#signup">Get started</a><a class="btn outline-light lg" href="#signin">Sign in</a></div>
-          <p class="fine">Invite-only beta. You need an invite code to create an account. <a class="light-link" href="#boards">Not sure of your exam board?</a></p>
+          <p class="fine">Invite-only beta. No code yet? <a class="light-link" href="#request">Request an invite</a> · <a class="light-link" href="#boards">Not sure of your exam board?</a></p>
         </div>
         <div class="hero-card" aria-label="Example plan">
           <div class="hc-head"><span class="chip">Pearson Edexcel · 1MA1 Foundation</span><span class="countdown"><b>${weeksUntil(C.examSeries(today())[2].date)}</b> weeks to go</span></div>
@@ -318,7 +328,7 @@
             <label for="pw">Password <small>at least 8 characters</small><input id="pw" type="password" minlength="8" required autocomplete="new-password"></label>
             ${state.err ? `<p class="msg err">${esc(state.err)}</p>` : ''}
             <button class="btn primary lg" id="go">Create account</button>
-            <p class="small muted">${role === 'student' ? 'Joining a class or a parent? Use the code they gave you.' : 'Don\'t have a code? This beta is invite only.'}</p>
+            <p class="small muted">${role === 'student' ? 'Joining a class or a parent? Use the code they gave you.' : 'Don\'t have a code? <a href="#request">Request an invite</a>.'}</p>
           </form>`}
       </div></div>`));
     app.querySelectorAll('[data-role]').forEach((b) => { b.onclick = () => signUpView({ role: b.dataset.role }); });
@@ -511,8 +521,9 @@
       <section class="panel"><h2>Make a code</h2>
         <label class="inline" for="inv-note">Note to remember who it's for (optional)<input id="inv-note" maxlength="80" placeholder="e.g. Test teacher account"></label>
         <div class="invite-grid">${boxes || '<p class="muted">Your account type can\'t invite anyone.</p>'}</div><div id="flash"></div></section>
+      ${me.is_platform_admin ? requestsPanel() : ''}
       <section class="panel"><h2>Codes you've made</h2>${codeList()}</section>`));
-    wireInvites(invitesPage);
+    wireInvites(invitesPage); wireRequests();
   }
 
   // ---------- dashboards ----------
@@ -588,6 +599,63 @@
       </tbody></table></div></section>`));
   }
 
+  // ---------- invite requests ----------
+  function requestView(done) {
+    const roles = [['parent', 'Parent'], ['student', 'Student'], ['teacher', 'Teacher'], ['school_admin', 'School']];
+    shell('request', page(`<div class="auth"><div class="auth-card">
+      ${done ? `<p class="kicker dark">Request sent</p><h1>Thank you</h1><p>We've got your request. You'll get an email with your invite code when a place is ready.</p><a class="btn primary" href="#">Back to home</a>` : `
+      <p class="kicker dark">Invite-only beta</p><h1>Request an invite</h1>
+      <p class="muted">Tell us a little about you and we'll email you an invite code.</p>
+      <form id="f" class="form" novalidate>
+        <fieldset class="tiers"><legend>I am a…</legend>${roles.map(([v, t], i) => `<label class="radio"><input type="radio" name="role" value="${v}" ${i === 0 ? 'checked' : ''}> ${t}</label>`).join('')}</fieldset>
+        <label for="r-name">Your name<input id="r-name" required maxlength="80" autocomplete="name"></label>
+        <label for="r-email">Email<input id="r-email" type="email" required maxlength="120" autocomplete="email"></label>
+        <label for="r-note">Anything we should know? <small>optional, e.g. subjects, exam year, school name</small><textarea id="r-note" rows="3" maxlength="500"></textarea></label>
+        <label class="hp" aria-hidden="true">Website<input id="r-web" tabindex="-1" autocomplete="off"></label>
+        <div class="out"></div>
+        <button class="btn primary lg" id="go">Send request</button>
+        <p class="small muted">We only use your email to send your invite.</p>
+      </form>`}</div></div>`));
+    const f = document.getElementById('f'); if (!f) return;
+    f.onsubmit = async (e) => {
+      e.preventDefault(); const out = f.querySelector('.out'); const b = document.getElementById('go');
+      const v = (id) => document.getElementById(id).value.trim();
+      if (v('r-web')) return requestView(true);
+      if (!v('r-name') || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v('r-email'))) { out.innerHTML = '<p class="msg err">Please give your name and a valid email.</p>'; return; }
+      b.disabled = true; b.textContent = 'Sending…';
+      try { await api.requestInvite({ full_name: v('r-name'), email: v('r-email'), role: f.querySelector('input[name=role]:checked').value, note: v('r-note') }); requestView(true); }
+      catch (x) { out.innerHTML = `<p class="msg err">${esc(x.message)}</p>`; b.disabled = false; b.textContent = 'Send request'; }
+    };
+  }
+  function requestsPanel() {
+    const rq = D.requests || []; const open = rq.filter((r) => r.status === 'new'); const doneList = rq.filter((r) => r.status !== 'new');
+    const row = (r) => `<li class="req ${r.status}"><div class="req-main"><b>${esc(r.full_name)}</b> <span class="tagx">${ROLE[r.role]}</span><br><a href="mailto:${esc(r.email)}">${esc(r.email)}</a> <span class="muted small">· ${fmt(r.created_at.slice(0, 10), { day: 'numeric', month: 'short' })}</span>${r.note ? `<p class="small">${esc(r.note)}</p>` : ''}</div>
+      <div class="req-act">${r.status === 'new' ? `<button class="btn primary sm" data-req-code="${esc(r.id)}">Make code and email</button><button class="btn ghost sm" data-req-done="${esc(r.id)}">Mark done</button>` : `<button class="btn ghost xs" data-req-del="${esc(r.id)}">Delete</button>`}</div></li>`;
+    return `<section class="panel"><div class="panel-head"><h2>Invite requests ${open.length ? `<span class="count">${open.length}</span>` : ''}</h2><a class="small" href="#request" target="_blank">See the request form ↗</a></div>
+      <div id="req-flash"></div>
+      ${open.length ? `<ul class="reqs">${open.map(row).join('')}</ul>` : '<p class="muted small">No new requests.</p>'}
+      ${doneList.length ? `<details class="other"><summary>Done (${doneList.length})</summary><ul class="reqs">${doneList.map(row).join('')}</ul></details>` : ''}</section>`;
+  }
+  function wireRequests() {
+    const find = (id) => (D.requests || []).find((r) => r.id === id);
+    app.querySelectorAll('[data-req-code]').forEach((b) => { b.onclick = async () => {
+      const r = find(b.dataset.reqCode); b.disabled = true;
+      try {
+        const code = newCode();
+        await api.addInvite({ code, role: r.role, max_uses: 1, note: (r.full_name + ' ' + r.email).slice(0, 80), expires_at: new Date(Date.now() + 30 * 864e5).toISOString() });
+        await api.setRequest(r.id, 'done');
+        const link = location.href.split('#')[0] + '#signup';
+        const body = `Hi ${r.full_name.split(' ')[0]},\n\nThank you for your interest in GCSE Study. Here is your invite code:\n\n${code}\n\nTo create your account, go to ${link}, choose "${ROLE[r.role]}" and enter the code. It works once and expires in 30 days.\n\nBest wishes,\n${me.full_name}`;
+        const mail = `mailto:${encodeURIComponent(r.email)}?subject=${encodeURIComponent('Your GCSE Study invite code')}&body=${encodeURIComponent(body)}`;
+        await load(); invitesPage();
+        document.getElementById('req-flash').innerHTML = `<p class="msg ok">Code ${esc(code)} made for ${esc(r.full_name)}. <a href="${esc(mail)}">Open the email to send it</a></p>`;
+        window.location.href = mail;
+      } catch (x) { b.disabled = false; document.getElementById('req-flash').innerHTML = `<p class="msg err">${esc(x.message)}</p>`; }
+    }; });
+    app.querySelectorAll('[data-req-done]').forEach((b) => { b.onclick = async () => { await api.setRequest(b.dataset.reqDone, 'done'); await load(); invitesPage(); }; });
+    app.querySelectorAll('[data-req-del]').forEach((b) => { b.onclick = async () => { await api.deleteRequest(b.dataset.reqDel); await load(); invitesPage(); }; });
+  }
+
   // ---------- my account ----------
   function accountPage(o = {}) {
     shell('account', page(`<div class="page-head"><a class="small" href="#home">← Dashboard</a><p class="kicker dark">${ROLE[me.role] || ''}</p><h1>My account</h1></div>
@@ -648,6 +716,7 @@
         if (route === 'signup') return signUpView();
         if (route === 'forgot') return forgotView();
         if (route === 'boards') return boardsPage();
+        if (route === 'request') return requestView();
         return landing();
       }
       if (!me.role) return shell('', page('<section class="panel"><h1>Almost there</h1><p>This login isn\'t set up for the new site yet. Ask the site owner to add it.</p></section>'));

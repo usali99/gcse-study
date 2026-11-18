@@ -275,3 +275,12 @@ mark.good { background: rgba(26, 163, 107, .18); color: inherit; border-radius: 
 @media (max-width: 900px) { .showcase { grid-template-columns: 1fr; } .overview { grid-template-columns: 1fr 1fr; } .ov-ring { grid-column: 1 / -1; } }
 @media (max-width: 600px) { .show { padding: 22px 18px 0; min-height: 0; border-radius: 20px; } .illo-subjects { grid-template-columns: repeat(2, 1fr); } .illo-plan { padding-right: 0; padding-top: 0; } .float-card { position: relative; width: 70%; margin: 14px 0 0 auto; top: 0; }
   .overview { grid-template-columns: 1fr 1fr; } }
+
+/* invite requests */
+.hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.reqs { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.req { display: flex; gap: 14px; justify-content: space-between; align-items: flex-start; border: 1px solid var(--line); border-radius: 12px; padding: 14px; flex-wrap: wrap; }
+.req.done { opacity: .7; } .req-main { min-width: 0; flex: 1; } .req-main p { margin: 6px 0 0; color: var(--ink-2); }
+.req-act { display: flex; gap: 8px; flex-wrap: wrap; }
+.tagx { font-size: .72rem; font-weight: 700; background: var(--surface-2); padding: 2px 8px; border-radius: 99px; }
+.count { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 99px; background: var(--accent); color: var(--accent-ink); font-size: .75rem; vertical-align: middle; }
