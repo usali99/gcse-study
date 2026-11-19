@@ -1,4 +1,4 @@
-/* GCSE Study, version 2: landing page, invite-only sign-up, four roles, course plans. */
+/* Ninegrade GCSE Plan (v2): landing page, invite-only sign-up, four roles, course plans. */
 (function () {
   'use strict';
   const C = window.CATALOGUE;
@@ -244,13 +244,13 @@
     const nav = navFor();
     app.innerHTML = `
       <header class="bar ${opts.dark ? 'bar-dark' : ''}"><div class="bar-in">
-        <a class="logo" href="#${me ? 'home' : ''}"><span class="logo-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 18V7l8-4 8 4v11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M9 21v-6h6v6" fill="none" stroke="currentColor" stroke-width="2.2"/></svg></span>GCSE Study</a>
+        <a class="logo" href="#${me ? 'home' : ''}"><span class="logo-mark" aria-hidden="true">9</span><span class="logo-words">Ninegrade<small>GCSE Plan</small></span></a>
         ${nav.length ? `<nav class="nav" aria-label="Main">${nav.map(([r, t]) => `<a href="#${r}" ${route === r ? 'aria-current="page"' : ''}>${t}</a>`).join('')}</nav>` : '<span class="grow"></span>'}
         ${me ? `<div class="me"><a class="me-link" href="#account" title="My account" ${route === 'account' ? 'aria-current="page"' : ''}><span class="avatar" aria-hidden="true">${esc(initials(me.full_name))}</span><span class="me-name">${esc(me.full_name)}<small>${me.is_platform_admin && D && !childrenOf(me.id).length ? 'Owner' : `${me.role ? ROLE[me.role] : ''}${me.is_platform_admin ? ' · owner' : ''}`}${api.demo ? ' · preview' : ''}</small></span></a><button class="btn ghost sm" id="signout">Sign out</button></div>`
           : `<div class="me"><a class="btn ghost sm" href="#signin">Sign in</a><a class="btn accent sm" href="#signup">Get started</a></div>`}
       </div></header>
       ${inner}
-      <footer class="foot"><div class="foot-in"><span>GCSE Study · invite-only beta</span><span>Plans follow the exam boards' published specifications. Always check dates with your exam centre.</span></div></footer>`;
+      <footer class="foot"><div class="foot-in"><span>Ninegrade GCSE Plan · invite-only beta</span><span>Plans follow the exam boards' published specifications. Always check dates with your exam centre.</span></div></footer>`;
     const so = document.getElementById('signout');
     if (so) so.onclick = async () => { await api.signOut(); study.forget(); me = null; location.hash = ''; render(); };
     window.scrollTo(0, 0);
@@ -303,7 +303,7 @@
         <div class="hero-copy">
           <p class="kicker">GCSE and IGCSE study, planned week by week</p>
           <h1>A clear plan from today to the exam hall.</h1>
-          <p class="lede">Pick the exam board, subject and specification code. GCSE Study builds a week-by-week plan to the exam, then turns each week into short lessons, self-marking quizzes and marked practice.</p>
+          <p class="lede">Pick the exam board, subject and specification code. Ninegrade builds a week-by-week plan to the exam, then turns each week into short lessons, self-marking quizzes and marked practice.</p>
           <div class="cta"><a class="btn accent lg" href="#signup">Get started</a><a class="btn outline-light lg" href="#signin">Sign in</a></div>
           <p class="fine">Invite-only beta. No code yet? <a class="light-link" href="#request">Request an invite</a> · <a class="light-link" href="#boards">Not sure of your exam board?</a></p>
         </div>
@@ -318,7 +318,7 @@
       <section class="band">
         <h2 class="section-title">Everything a GCSE year needs, in one place</h2>
         <div class="showcase">
-          <article class="show show-blue"><p class="show-k">Build your plan</p><p class="show-t">Pick the board and specification for each subject, and GCSE Study builds a week-by-week plan to the exam.</p>${illoSubjects()}</article>
+          <article class="show show-blue"><p class="show-k">Build your plan</p><p class="show-t">Pick the board and specification for each subject, and Ninegrade builds a week-by-week plan to the exam.</p>${illoSubjects()}</article>
           <article class="show show-green"><p class="show-k">Study week by week</p><p class="show-t">Each week shows what to study in every subject, with progress you can see building towards the exam.</p>${illoPlan()}</article>
           <article class="show show-amber"><p class="show-k">Marking you learn from</p><p class="show-t">Written answers are marked mark-scheme style: where marks were gained, where they were lost, and how to fix it.</p>${illoFeedback()}</article>
           <article class="show show-violet"><p class="show-k">Progress, shared</p><p class="show-t">Scores, weak topics and time spent by subject, shared with the parent or teacher who supports you.</p>${illoProgress()}</article>
@@ -898,9 +898,9 @@
         await api.addInvite({ code, role: r.role, max_uses: 1, note: (r.full_name + ' ' + r.email).slice(0, 80), expires_at: new Date(Date.now() + 30 * 864e5).toISOString() });
         await api.setRequest(r.id, 'done');
         const link = location.href.split('#')[0] + '#signup';
-        const body = `Hi ${r.full_name.split(' ')[0]},\n\nThank you for your interest in GCSE Study. Here is your invite code:\n\n${code}\n\nTo create your account, go to ${link}, choose "${ROLE[r.role]}" and enter the code. It works once and expires in 30 days.\n\nBest wishes,\n${me.full_name}`;
-        const mail = `mailto:${encodeURIComponent(r.email)}?subject=${encodeURIComponent('Your GCSE Study invite code')}&body=${encodeURIComponent(body)}`;
-        const gmail = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(r.email)}&su=${encodeURIComponent('Your GCSE Study invite code')}&body=${encodeURIComponent(body)}`;
+        const body = `Hi ${r.full_name.split(' ')[0]},\n\nThank you for your interest in Ninegrade GCSE Plan. Here is your invite code:\n\n${code}\n\nTo create your account, go to ${link}, choose "${ROLE[r.role]}" and enter the code. It works once and expires in 30 days.\n\nBest wishes,\n${me.full_name}`;
+        const mail = `mailto:${encodeURIComponent(r.email)}?subject=${encodeURIComponent('Your Ninegrade invite code')}&body=${encodeURIComponent(body)}`;
+        const gmail = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(r.email)}&su=${encodeURIComponent('Your Ninegrade invite code')}&body=${encodeURIComponent(body)}`;
         await load(); invitesPage();
         const fl = document.getElementById('req-flash');
         fl.innerHTML = `<div class="msg ok"><p><b>Code ${esc(code)} made for ${esc(r.full_name)}.</b> Now send it to ${esc(r.email)}:</p>
