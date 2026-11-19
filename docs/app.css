@@ -394,3 +394,4 @@ details.other summary { cursor: pointer; font-weight: 600; color: var(--primary)
 .lesson-update textarea { width: 100%; }
 .lu-reqs { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 8px; } .lu-reqs li { padding: 8px 10px; background: var(--surface-2); border-radius: 10px; }
 .lesson-update label.inline { display: block; } .lesson-update textarea { display: block; width: 100%; max-width: none; margin-top: 6px; } .lesson-update .row { margin-top: 10px; }
+.msg.info { background: color-mix(in srgb, var(--primary) 10%, var(--surface)); color: var(--ink); }

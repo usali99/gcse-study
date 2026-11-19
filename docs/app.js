@@ -427,7 +427,12 @@
       <div class="meter" role="img" aria-label="${done} of ${total} weeks done"><span style="width:${total ? Math.round(done / total * 100) : 0}%"></span></div>
     </a>`;
   }
+  // A student with a parent or teacher can see their plans but not change them (matches v2-student-readonly.sql).
+  const managedBy = (sid) => (D.guardianships.some((g) => g.student_id === sid) ? 'parent' : D.classStudents.some((x) => x.student_id === sid) ? 'teacher' : '');
+  const canEditPlan = (sid) => !me || me.id !== sid || !managedBy(sid);
+  const setByNote = (sid) => `<p class="msg info">Your ${managedBy(sid) === 'teacher' ? 'teacher' : 'parent'} sets your plans and timetable. If something doesn't work for you, ask them to change it.</p>`;
   function coursesBlock(sid, title, canAdd) {
+    canAdd = canAdd && canEditPlan(sid);
     const cs = coursesOf(sid);
     return `<section class="panel"><div class="panel-head"><h2>${title}</h2>${canAdd ? `<a class="btn primary sm" href="#plan-for-${esc(sid)}">Add a course</a>` : ''}</div>
       ${cs.length ? `<div class="course-grid">${cs.map((c) => courseCard(c)).join('')}</div>` : `<div class="empty"><b>No courses yet.</b><span>A course plan takes about a minute: board, subject, specification code and exam date.</span>${canAdd ? `<a class="btn primary sm" href="#plan-for-${esc(sid)}">Create the first plan</a>` : ''}</div>`}
@@ -460,7 +465,7 @@
       <div class="page-head"><a class="small" href="#home">← Dashboard</a>
         <p class="kicker dark">${esc(c.board)} · ${esc(c.qualification)}${c.code ? ' · ' + esc(c.code) : ''}${c.tier ? ' · ' + esc(c.tier) : ''}</p>
         <h1>${esc(c.subject)}${st.id !== me.id ? ` <span class="for">for ${esc(st.full_name)}</span>` : ''}</h1>
-        <div class="row"><a class="btn primary sm" href="#edit-${esc(c.id)}">Edit plan</a><a class="btn ghost sm" href="#timetable-${esc(c.student_id)}">Weekly timetable</a>${daysOf(c).length ? `<span class="muted small">Studied on ${daysOf(c).map((d) => DAYS[d - 1]).join(', ')}</span>` : ''}</div></div>
+        <div class="row">${canEditPlan(c.student_id) ? `<a class="btn primary sm" href="#edit-${esc(c.id)}">Edit plan</a>` : ''}<a class="btn ghost sm" href="#timetable-${esc(c.student_id)}">Weekly timetable</a>${daysOf(c).length ? `<span class="muted small">Studied on ${daysOf(c).map((d) => DAYS[d - 1]).join(', ')}</span>` : ''}</div></div>
       <div class="stats">
         <div class="stat"><span>Exam</span><b>${fmt(c.exam_date, { day: 'numeric', month: 'short', year: 'numeric' })}</b></div>
         <div class="stat"><span>Weeks to go</span><b>${weeksUntil(c.exam_date)}</b></div>
@@ -483,6 +488,7 @@
   function editCourse(id) {
     const c = D.courses.find((x) => x.id === id);
     if (!c) return shell('home', page('<section class="panel"><h1>Course not found</h1><p><a href="#home">Back to your dashboard</a></p></section>'));
+    if (!canEditPlan(c.student_id)) return shell('home', page(`<div class="narrow"><div class="page-head"><a class="small" href="#course-${esc(c.id)}">← Back to the plan</a><h1>${esc(c.subject)}</h1></div>${setByNote(c.student_id)}</div>`));
     const spec = C.SPECS.find((s) => s.code === c.code && s.board === c.board);
     let plan = JSON.parse(JSON.stringify(c.plan || []));
     const KINDS = { teach: 'Teaching', review: 'Review', revision: 'Revision', break: 'Break' };
@@ -555,15 +561,15 @@
     list();
   }
   function timetablePage(sid) {
-    const st = person(sid); const cs = coursesOf(sid);
+    const st = person(sid); const cs = coursesOf(sid); const ro = !canEditPlan(sid);
     const draw = (msg) => {
       const sel = Object.fromEntries(cs.map((c) => [c.id, daysOf(c)]));
       shell('home', page(`<div class="page-head"><a class="small" href="#home">← Dashboard</a><p class="kicker dark">${st.id === me.id ? 'Your week' : esc(st.full_name)}</p><h1>Weekly timetable</h1>
-        <p class="muted">Tick the days each subject is studied. Each subject's weekly hours are shared across its days, and the totals show how busy each day is.</p></div>
+        <p class="muted">${ro ? 'The ticked days are when you study each subject, and how long for. The totals show how busy each day is.' : "Tick the days each subject is studied. Each subject's weekly hours are shared across its days, and the totals show how busy each day is."}</p></div>${ro ? setByNote(sid) : ''}
         ${cs.length ? `<section class="panel"><div id="t-msg">${msg || ''}</div><div class="scroll-x"><table class="data tt"><thead><tr><th>Subject</th>${DAYS.map((d) => `<th>${d}</th>`).join('')}<th>Per day</th></tr></thead><tbody>
-          ${cs.map((c) => `<tr><td><b>${esc(c.subject)}</b><small class="muted">${c.hours_per_week} h a week</small></td>${DAYS.map((d, i) => `<td><input type="checkbox" data-c="${esc(c.id)}" data-d="${i + 1}" ${sel[c.id].includes(i + 1) ? 'checked' : ''} aria-label="${esc(c.subject)} on ${DAYS_LONG[i]}"></td>`).join('')}<td class="muted small" data-per="${esc(c.id)}"></td></tr>`).join('')}
+          ${cs.map((c) => `<tr><td><b>${esc(c.subject)}</b><small class="muted">${c.hours_per_week} h a week</small></td>${DAYS.map((d, i) => `<td><input type="checkbox" data-c="${esc(c.id)}" data-d="${i + 1}" ${sel[c.id].includes(i + 1) ? 'checked' : ''} aria-label="${esc(c.subject)} on ${DAYS_LONG[i]}" ${ro ? 'disabled' : ''}></td>`).join('')}<td class="muted small" data-per="${esc(c.id)}"></td></tr>`).join('')}
           </tbody><tfoot><tr><th>Total</th>${DAYS.map((d, i) => `<td class="small" data-tot="${i + 1}"></td>`).join('')}<td></td></tr></tfoot></table></div>
-          <div class="row" style="margin-top:14px"><button class="btn primary" id="t-save">Save timetable</button><button class="btn ghost sm" id="t-even">Suggest days for me</button></div></section>`
+          ${ro ? '' : '<div class="row" style="margin-top:14px"><button class="btn primary" id="t-save">Save timetable</button><button class="btn ghost sm" id="t-even">Suggest days for me</button></div>'}</section>`
           : '<section class="panel"><p class="muted">Add a course first, then choose its days here.</p></section>'}${lessonBox(sid)}`));
       wireLessonBox(sid);
       if (!cs.length) return;
@@ -572,6 +578,7 @@
         cs.forEach((c) => { const m = perDay({ ...c, study_days: r[c.id] }); app.querySelector(`[data-per="${c.id}"]`).textContent = r[c.id].length ? mins(m) : 'Any day'; r[c.id].forEach((d) => { tot[d] += m; }); });
         for (let d = 1; d <= 7; d++) { const el = app.querySelector(`[data-tot="${d}"]`); el.textContent = tot[d] ? mins(tot[d]) : ''; el.className = 'small' + (tot[d] > 150 ? ' warn-t' : ''); } };
       app.querySelectorAll('[data-c]').forEach((x) => { x.onchange = sums; }); sums();
+      if (ro) return;
       document.getElementById('t-even').onclick = () => {
         // Spread subjects over Mon-Fri: about one study day per 45 minutes a week, rotating the start day.
         let k = 0; cs.forEach((c) => { const n = Math.min(5, Math.max(1, Math.round(Number(c.hours_per_week) * 60 / 45)));
@@ -978,7 +985,7 @@
       if (route === 'welcome') return landing();
       if (route === 'boards') return boardsPage();
       if (route.startsWith('course-')) return coursePage(route.slice(7));
-      if (route.startsWith('plan-for-')) return wizard(route.slice(9));
+      if (route.startsWith('plan-for-')) { const sid = route.slice(9); if (!canEditPlan(sid)) return shell('home', page(`<div class="narrow"><div class="page-head"><a class="small" href="#home">← Dashboard</a><h1>Add a course</h1></div>${setByNote(sid)}</div>`)); return wizard(sid); }
       if (route.startsWith('edit-')) return editCourse(route.slice(5));
       if (route.startsWith('timetable-')) return timetablePage(route.slice(10));
       if (route === 'invites') return invitesPage();
