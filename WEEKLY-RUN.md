@@ -53,6 +53,9 @@ each course's `study_days` (1=Mon..7=Sun) are the days that subject gets a lesso
 plan week that covers next Monday gives the topic. A course with no days ticked gets no lessons. The parent may change this
 at any time, so always read it fresh. If the site and the fixed timetable below disagree, the site wins.
 
+If next week's lessons were already written by an evening run (from an "Update next week's lessons" request), don't
+rewrite them: check they match the site's courses and only add anything missing.
+
 Write next week's lessons in `/mnt/project-files/lessons/week-NN/` in the same format as week 1
 (Markdown lesson + `-answers.md` + `quizzes.json` for the self-marking memory quizzes). Follow the timetable
 (Mon English + Maths, Tue English + Chemistry, Wed English + Physics, Thu English, Fri English; English is the
