@@ -102,8 +102,9 @@
     const pill = (id) => { const p = prog(id);
       if (p.marked) return `<span class="pill done">Marked ${p.marked.mark}/${p.marked.mark_max}</span>`;
       if (p.sent) return '<span class="pill sent">Sent, waiting for marking</span>';
-      if (p.best) return `<span class="pill todo">Quiz ${p.best.score}/${p.best.max}, work not sent</span>`;
-      return '<span class="pill todo">Not started</span>'; };
+      const late = ((D.byId[id] || {}).lesson_date || '9') < today();
+      if (p.best) return `<span class="pill ${late ? 'missed' : 'todo'}">Quiz ${p.best.score}/${p.best.max}, work not sent</span>`;
+      return late ? '<span class="pill missed">Missed, please catch up</span>' : '<span class="pill todo">Not started</span>'; };
     const card = (l, o = {}) => `<a class="lesson-card" href="#lesson-${esc(l.id)}"><span class="stripe ${l.subject}"></span>
       <span class="lc-body"><span class="subj ${l.subject}">${SUBJECTS[l.subject] || l.subject}${o.date ? ` · ${fmtDay(l.lesson_date, { weekday: 'short', day: 'numeric', month: 'short' })}` : ''}</span>
       <span class="lc-title">${esc(l.title)}</span><span class="muted small">About ${l.minutes} minutes${l.status === 'draft' ? ' · <span class="pill draft">Not published yet</span>' : ''}</span></span>

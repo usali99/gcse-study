@@ -296,6 +296,7 @@ mark.good { background: rgba(26, 163, 107, .18); color: inherit; border-radius: 
 .pill.done, .pill.st-Secure { background: var(--ok-bg); color: var(--ok); }
 .pill.st-Improving { background: color-mix(in srgb, var(--warn) 16%, var(--surface)); color: var(--warn); }
 .pill.st-Weak { background: var(--err-bg); color: var(--err); }
+.pill.missed { background: var(--err-bg); color: var(--err); border-color: color-mix(in srgb, var(--err) 30%, transparent); }
 .pill.draft { background: var(--hi); color: var(--hi-ink); }
 .subj { font-weight: 700; font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; }
 .subj.english { color: var(--english); } .subj.maths { color: var(--maths); } .subj.chemistry { color: var(--chemistry); } .subj.physics { color: var(--physics); }
