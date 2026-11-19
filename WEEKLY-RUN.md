@@ -46,6 +46,13 @@ Mirror the changes in the subject's `weak-topics.md` in `/mnt/project-files/`.
 
 ## 4. Write next week
 
+**The plan on the site decides the timetable (Usman, 19 Nov 2026).** Before writing, read Hadi's courses
+(`node tools/db.mjs get "courses?select=subject,code,tier,hours_per_week,study_days,plan&student_id=eq.<Hadi's v2 id, in project memory v2-site>"`):
+each course's `study_days` (1=Mon..7=Sun) are the days that subject gets a lesson, its minutes per lesson are
+`hours_per_week*60 / number of days` (round to 5; split anything over 45 min into two parts in the same lesson), and the
+plan week that covers next Monday gives the topic. A course with no days ticked gets no lessons. The parent may change this
+at any time, so always read it fresh. If the site and the fixed timetable below disagree, the site wins.
+
 Write next week's lessons in `/mnt/project-files/lessons/week-NN/` in the same format as week 1
 (Markdown lesson + `-answers.md` + `quizzes.json` for the self-marking memory quizzes). Follow the timetable
 (Mon English + Maths, Tue English + Chemistry, Wed English + Physics, Thu English, Fri English; English is the
@@ -90,3 +97,21 @@ and the live row (`patch lessons "id=eq.<id>" '<json>'`; never change a lesson's
 answer sheet. For a plan report, fix the topic list in docs/catalogue.js if it is wrong. Then mark it:
 `patch feedback "id=eq.<id>" '{"status":"fixed"}'` (or `"not_a_problem"` with a reason in the summary).
 List what was fixed in the summary.
+
+
+## Lesson update requests ("Update next week's lessons" button; both runs, Sun–Fri evening and Saturday)
+
+The parent can press **Update next week's lessons** on the Weekly timetable or Edit plan page. It adds a row to
+`lesson_requests` (student_id, note, status 'new'). Each run:
+
+1. `node tools/db.mjs get "lesson_requests?status=eq.new&order=created_at"`. If there are none, do nothing here.
+2. Read the courses fresh (see section 4) and the parent's note. "Next week" = the Mon–Fri starting the coming Monday
+   (on a Sunday that is tomorrow).
+3. Rewrite that week's lessons to match: keep any lesson Hadi has already started (has a quiz attempt or submission) exactly
+   as it is; replace or add the rest; remove lessons for subjects/days no longer ticked if not started. Build with
+   build-content.mjs and push with push-week as DRAFTS (never --publish). If that week was already approved, the changed
+   lessons go back to draft for the parent to approve again; say so in the reply.
+4. Patch each request: `status=done`, `done_at=now`, and a short `reply` the parent will read on the page (one or two
+   plain sentences, e.g. "Done. Week of 23 Nov now has Maths, Chemistry and Physics every day (30 min each). Please approve
+   it on the Lessons page.").
+5. Mention it in the run's summary to Usman.
