@@ -243,6 +243,14 @@
       if (slot && l.quiz && l.quiz.length) {
         slot.outerHTML = quizHtml(l.quiz, l) + (p.best ? `<p class="muted small">Your best so far: ${p.best.score}/${p.best.max}.</p>` : '');
         const form = document.getElementById('quiz');
+        if (!admin && !dGet(dKey(id, 'quiz'))) { // show his latest try, already marked
+          const last = D.attempts.filter((a) => a.lesson_id === id).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
+          if (last && Array.isArray(last.answers)) {
+            last.answers.forEach((a, i) => { const q = l.quiz[i]; if (!q || a == null || a.given == null) return;
+              if (q.type === 'mc') { const r = form.querySelector(`input[name=q${i}][value="${Number(a.given)}"]`); if (r) r.checked = true; }
+              else { const t = form.querySelector(`#q${i}`); if (t) t.value = a.given; } });
+            const r = markQuiz(l.quiz, form);
+            document.getElementById('quiz-score').textContent = `Your last try: ${r.score} / ${r.max}. Change any answer and press Check again.`; } }
         if (!admin) { const qk = dKey(id, 'quiz'); const saved = dGet(qk) || {};
           [...form.elements].forEach((el, i) => { const k = el.name || 'f' + i; if (!(k in saved)) return;
             if (el.type === 'radio' || el.type === 'checkbox') el.checked = saved[k] === el.value; else if (el.tagName !== 'BUTTON') el.value = saved[k]; });
