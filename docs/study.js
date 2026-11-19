@@ -289,7 +289,7 @@
         if ((!text || blank) && !files.length) { msg.innerHTML = '<p class="msg err">Type your answers or add a photo first.</p>'; return; }
         const b = document.getElementById('send-btn'); b.disabled = true; b.textContent = 'Sending…';
         try { const small = await Promise.all(files.map(shrink)); const mins = parseInt(document.getElementById('mins').value, 10);
-          await api.addSub({ lesson_id: id, answer_text: text, minutes_taken: Number.isNaN(mins) ? null : mins, files: small });
+          await api.addSub({ lesson_id: id, answer_text: blank ? '' : text, minutes_taken: Number.isNaN(mins) ? null : mins, files: small });
           dSet(ak, null); window.onbeforeunload = null; await load(); await lessonView(id); document.getElementById('send-msg').innerHTML = '<p class="msg ok">Sent. Well done! It will be marked this evening.</p>'; document.getElementById('send').scrollIntoView(); }
         catch (x) { b.disabled = false; b.textContent = p.sent ? 'Send again' : 'Send my work'; msg.innerHTML = `<p class="msg err">That didn't send: ${esc(x.message)}. Check your internet and press Send again.</p>`; }
       };
