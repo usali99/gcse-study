@@ -99,6 +99,10 @@
       const subs = D.subs.filter((s) => s.lesson_id === id); const marked = subs.find((s) => s.mark != null);
       return { best, subs, marked, sent: subs.length > 0 };
     };
+    // Drafts: typed answers are kept on this device until they are sent, so a refresh or Back doesn't lose them.
+    const dKey = (id, kind) => `ng-draft:${ctx.getMeId() || 'x'}:${id}:${kind}`;
+    const dGet = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
+    const dSet = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage blocked */ } };
     const pill = (id) => { const p = prog(id);
       if (p.marked) return `<span class="pill done">Marked ${p.marked.mark}/${p.marked.mark_max}</span>`;
       if (p.sent) return '<span class="pill sent">Sent, waiting for marking</span>';
@@ -239,19 +243,29 @@
       if (slot && l.quiz && l.quiz.length) {
         slot.outerHTML = quizHtml(l.quiz, l) + (p.best ? `<p class="muted small">Your best so far: ${p.best.score}/${p.best.max}.</p>` : '');
         const form = document.getElementById('quiz');
-        form.onsubmit = async (e) => { e.preventDefault(); const r = markQuiz(l.quiz, form);
+        if (!admin) { const qk = dKey(id, 'quiz'); const saved = dGet(qk) || {};
+          [...form.elements].forEach((el, i) => { const k = el.name || 'f' + i; if (!(k in saved)) return;
+            if (el.type === 'radio' || el.type === 'checkbox') el.checked = saved[k] === el.value; else if (el.tagName !== 'BUTTON') el.value = saved[k]; });
+          form.addEventListener('input', () => { const v = {}; [...form.elements].forEach((el, i) => { const k = el.name || 'f' + i;
+            if (el.type === 'radio' || el.type === 'checkbox') { if (el.checked) v[k] = el.value; } else if (el.tagName !== 'BUTTON' && el.value) v[k] = el.value; }); dSet(qk, v); }); }
+        form.onsubmit = async (e) => { e.preventDefault(); const r = markQuiz(l.quiz, form); dSet(dKey(id, 'quiz'), null);
           document.getElementById('quiz-score').textContent = `${r.score} / ${r.max}${r.score === r.max ? ' Brilliant!' : ''}`;
           if (!admin) { try { await api.addAttempt({ lesson_id: id, ...r }); D.attempts.unshift({ lesson_id: id, ...r, created_at: new Date().toISOString() }); } catch (x) { document.getElementById('quiz-score').textContent += ' (score not saved: ' + x.message + ')'; } } };
       }
       if (admin) { thumbs(); const sheet = await api.answerSheet(id).catch(() => null); document.getElementById('answer-sheet').innerHTML = sheet || '<p class="muted">No answer sheet for this lesson.</p>'; return; }
       thumbs();
+      const ak = dKey(id, 'answer'); const ans = document.getElementById('answer'); const minsEl = document.getElementById('mins');
+      const draft = dGet(ak); if (draft) { ans.value = draft.text || ''; minsEl.value = draft.mins || ''; if (draft.text) document.getElementById('send-msg').innerHTML = '<p class="msg info">Your unsent answer was kept. Press Send when you are ready.</p>'; }
+      const keep = () => dSet(ak, ans.value.trim() || minsEl.value ? { text: ans.value, mins: minsEl.value } : null);
+      ans.addEventListener('input', keep); minsEl.addEventListener('input', keep);
+      window.onbeforeunload = () => (document.getElementById('photos') && document.getElementById('photos').files.length ? 'Your photos have not been sent yet.' : undefined);
       document.getElementById('sendform').onsubmit = async (e) => {
         e.preventDefault(); const text = document.getElementById('answer').value.trim(); const files = [...document.getElementById('photos').files]; const msg = document.getElementById('send-msg');
         if (!text && !files.length) { msg.innerHTML = '<p class="msg err">Type your answers or add a photo first.</p>'; return; }
         const b = document.getElementById('send-btn'); b.disabled = true; b.textContent = 'Sending…';
         try { const small = await Promise.all(files.map(shrink)); const mins = parseInt(document.getElementById('mins').value, 10);
           await api.addSub({ lesson_id: id, answer_text: text, minutes_taken: Number.isNaN(mins) ? null : mins, files: small });
-          await load(); await lessonView(id); document.getElementById('send-msg').innerHTML = '<p class="msg ok">Sent. Well done! It will be marked this evening.</p>'; document.getElementById('send').scrollIntoView(); }
+          dSet(ak, null); window.onbeforeunload = null; await load(); await lessonView(id); document.getElementById('send-msg').innerHTML = '<p class="msg ok">Sent. Well done! It will be marked this evening.</p>'; document.getElementById('send').scrollIntoView(); }
         catch (x) { b.disabled = false; b.textContent = p.sent ? 'Send again' : 'Send my work'; msg.innerHTML = `<p class="msg err">That didn't send: ${esc(x.message)}. Check your internet and press Send again.</p>`; }
       };
     }
