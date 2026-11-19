@@ -408,12 +408,17 @@
   }
 
   // ---------- course cards and plan ----------
+  const weekEnd = (start) => new Date(new Date(start + 'T12:00:00').getTime() + 7 * 864e5).toISOString().slice(0, 10);
+  const isBehind = (w) => w.kind !== 'break' && !w.done && weekEnd(w.start) <= today();
+  const behindCount = (c) => (c.plan || []).filter(isBehind).length;
   function courseCard(c, showStudent) {
+    const late = behindCount(c);
     const w = thisWeek(c); const total = (c.plan || []).filter((x) => x.kind !== 'break').length;
     const done = (c.plan || []).filter((x) => x.kind !== 'break' && x.start <= today()).length;
     return `<a class="course" href="#course-${esc(c.id)}">
       <div class="course-top">${ring(total ? done / total * 100 : 0, 46, `${done} of ${total} weeks done`)}<span class="subject">${esc(c.subject)}</span><span class="wk-left"><b>${weeksUntil(c.exam_date)}</b> wks</span></div>
       <div class="course-meta">${esc(c.board)} · ${esc(c.qualification)}${c.code ? ' · ' + esc(c.code) : ''}${c.tier ? ' · ' + esc(c.tier) : ''}${showStudent ? ` · <b>${esc(person(c.student_id).full_name)}</b>` : ''}</div>
+      ${late ? `<div class="behind-line"><span class="tag behind">Behind</span>${late} past week${late > 1 ? 's' : ''} not ticked done</div>` : ''}
       ${w ? `<div class="course-now"><span class="kind kind-${w.kind}">${w.kind === 'teach' ? 'This week' : w.kind === 'review' ? 'Review week' : w.kind === 'revision' ? 'Revision' : 'Break'}</span>${esc(w.title)}</div>` : ''}
       <div class="meter" role="img" aria-label="${done} of ${total} weeks done"><span style="width:${total ? Math.round(done / total * 100) : 0}%"></span></div>
     </a>`;
@@ -460,7 +465,7 @@
       </div>
       <section class="panel"><div class="panel-head"><h2>Week-by-week plan</h2><div class="legend"><span><i class="dot kind-teach"></i>Teaching</span><span><i class="dot kind-review"></i>Review</span><span><i class="dot kind-revision"></i>Revision</span><span><i class="dot kind-break"></i>Break</span></div></div>
         <div class="timeline">${Object.keys(byMonth).map((k) => `<div class="month"><h3>${fmt(k + '-15', { month: 'long', year: 'numeric' })}</h3>
-          <ol>${byMonth[k].map((w) => { const now = w.start <= t && t < new Date(new Date(w.start + 'T12:00:00').getTime() + 7 * 864e5).toISOString().slice(0, 10); return `<li class="wk-row kind-${w.kind} ${now ? 'now' : ''}"><span class="wk-n">Wk ${w.n}</span><span class="wk-d">${fmt(w.start, { day: 'numeric', month: 'short' })}</span><span class="wk-t">${esc(w.title)}${now ? ' <span class="tag">This week</span>' : ''}${w.done ? ' <span class="tag ok">Done</span>' : ''}</span>${report({ place: 'plan', ref: c.id, item: 'Week ' + w.n, context: `${c.subject} (${c.code || c.board}): ${w.title}` }, '⚑')}</li>`; }).join('')}</ol></div>`).join('')}</div>
+          <ol>${byMonth[k].map((w) => { const now = w.start <= t && t < new Date(new Date(w.start + 'T12:00:00').getTime() + 7 * 864e5).toISOString().slice(0, 10); return `<li class="wk-row kind-${w.kind} ${now ? 'now' : ''} ${isBehind(w) ? 'behind' : ''}"><span class="wk-n">Wk ${w.n}</span><span class="wk-d">${fmt(w.start, { day: 'numeric', month: 'short' })}</span><span class="wk-t">${esc(w.title)}${now ? ' <span class="tag">This week</span>' : ''}${w.done ? ' <span class="tag ok">Done</span>' : ''}${isBehind(w) ? ' <span class="tag behind">Behind</span>' : ''}</span>${report({ place: 'plan', ref: c.id, item: 'Week ' + w.n, context: `${c.subject} (${c.code || c.board}): ${w.title}` }, '⚑')}</li>`; }).join('')}</ol></div>`).join('')}</div>
       </section>
       <section class="panel danger-zone"><div class="panel-head"><div><h2>Remove this course</h2><p class="muted small">This deletes the plan. It can't be undone.</p></div><button class="btn danger sm" id="del">Remove course</button></div><div id="confirm"></div></section>`));
     document.getElementById('del').onclick = () => {
