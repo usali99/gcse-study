@@ -25,7 +25,11 @@ Download any photos (`files` on a submission) with `node tools/db.mjs download <
 
 For each submission with `mark` = null: mark it against the lesson's answer sheet
 (`lessons/week-NN/*-answers.md`), using the official mark-scheme style (method marks, 1 mark per point).
-Write short, encouraging feedback for Hadi: what went well and one thing to fix. Then:
+Write short, encouraging feedback for Hadi: what went well and one thing to fix. 
+**Several sends for one lesson** (Hadi can press "Send again" to fix or add to an answer): mark all unmarked
+submissions for the same lesson together as ONE piece of work, where a later answer to the same question replaces the
+earlier one. Put the mark and full feedback on the latest submission; give the earlier ones the same mark/mark_max and
+the feedback "Marked together with your later answer." Then:
 
 ```
 node tools/db.mjs patch submissions "id=eq.<id>" '{"mark":6,"mark_max":8,"feedback":"...","marked_at":"<now ISO>"}'

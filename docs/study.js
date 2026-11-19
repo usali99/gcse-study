@@ -229,12 +229,12 @@
         <p class="report-row">Spotted a mistake in this lesson? ${report({ place: 'lesson', ref: l.id, context: l.title })}</p>
         ${admin ? hadiWork(l) + '<section class="panel"><details class="other"><summary>Answer sheet for this lesson (only parents see this)</summary><p class="muted small">The right answers and marking guide. Claude uses it to mark Hadi\'s work, and you can use it to check a mark.</p><div class="lesson answers" id="answer-sheet"><p class="muted">Loading the answer sheet…</p></div></details></section>' : `
         <section class="panel" id="send"><h2>Send your work</h2>${p.subs.map((s) => subView(s)).join('')}
-          <p class="muted">${p.sent ? 'Want to add more? Send it below.' : 'Type your answers, or take photos of your page. Then press Send.'}</p>
+          <p class="muted">${p.marked ? 'Want to send a better answer after reading the feedback? Type it below and press Send again.' : p.sent ? 'Spotted a mistake, or want to add something? Type the new or extra answer below and press <b>Send again</b>. Everything you send for this lesson is marked together.' : 'Type your answers, or take photos of your page. Then press Send.'}</p>
           <form id="sendform" class="form">
             <label for="answer">Your answers<textarea id="answer" rows="8" placeholder="Q1&#10;1. ...&#10;2. ..."></textarea></label>
             <label for="photos">Photos of your written work (optional)<input id="photos" type="file" accept="image/*,application/pdf" multiple></label>
             <label for="mins">Time for the exam-style question, in minutes (optional)<input id="mins" type="number" min="0" max="180" inputmode="numeric"></label>
-            <div id="send-msg"></div><button class="btn primary lg" type="submit" id="send-btn">Send my work</button></form></section>`}</div>`));
+            <div id="send-msg"></div><button class="btn primary lg" type="submit" id="send-btn">${p.sent ? 'Send again' : 'Send my work'}</button></form></section>`}</div>`));
       const slot = app.querySelector('.quiz-slot');
       if (slot && l.quiz && l.quiz.length) {
         slot.outerHTML = quizHtml(l.quiz, l) + (p.best ? `<p class="muted small">Your best so far: ${p.best.score}/${p.best.max}.</p>` : '');
@@ -252,7 +252,7 @@
         try { const small = await Promise.all(files.map(shrink)); const mins = parseInt(document.getElementById('mins').value, 10);
           await api.addSub({ lesson_id: id, answer_text: text, minutes_taken: Number.isNaN(mins) ? null : mins, files: small });
           await load(); await lessonView(id); document.getElementById('send-msg').innerHTML = '<p class="msg ok">Sent. Well done! It will be marked this evening.</p>'; document.getElementById('send').scrollIntoView(); }
-        catch (x) { b.disabled = false; b.textContent = 'Send my work'; msg.innerHTML = `<p class="msg err">That didn't send: ${esc(x.message)}. Check your internet and press Send again.</p>`; }
+        catch (x) { b.disabled = false; b.textContent = p.sent ? 'Send again' : 'Send my work'; msg.innerHTML = `<p class="msg err">That didn't send: ${esc(x.message)}. Check your internet and press Send again.</p>`; }
       };
     }
 
