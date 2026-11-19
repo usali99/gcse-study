@@ -376,7 +376,7 @@ details.other summary { cursor: pointer; font-weight: 600; color: var(--primary)
 @media (max-width: 720px) { .wk-edit li { grid-template-columns: 1fr auto; } .wk-edit li input[data-title] { grid-column: 1 / -1; } }
 
 /* ---------- report a problem ---------- */
-.course { min-width: 0; } .course-top .subject { overflow-wrap: anywhere; } .wk-left { flex: none; }
+.course { min-width: 0; } .course-top .subject { overflow-wrap: break-word; hyphens: auto; line-height: 1.25; } .wk-left { flex: none; }
 .report-btn { background: none; border: 0; padding: 4px 6px; color: var(--muted); font: inherit; font-size: .8rem; cursor: pointer; border-radius: 6px; white-space: nowrap; }
 .report-btn:hover { color: var(--primary); background: var(--surface-2); } .report-btn:disabled { cursor: default; color: var(--ok); }
 .quiz li .report-btn { margin-top: 4px; }

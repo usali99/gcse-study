@@ -416,8 +416,8 @@
     const w = thisWeek(c); const total = (c.plan || []).filter((x) => x.kind !== 'break').length;
     const done = (c.plan || []).filter((x) => x.kind !== 'break' && x.start <= today()).length;
     return `<a class="course" href="#course-${esc(c.id)}">
-      <div class="course-top">${ring(total ? done / total * 100 : 0, 46, `${done} of ${total} weeks done`)}<span class="subject">${esc(c.subject)}</span><span class="wk-left"><b>${weeksUntil(c.exam_date)}</b> wks</span></div>
-      <div class="course-meta">${esc(c.board)} · ${esc(c.qualification)}${c.code ? ' · ' + esc(c.code) : ''}${c.tier ? ' · ' + esc(c.tier) : ''}${showStudent ? ` · <b>${esc(person(c.student_id).full_name)}</b>` : ''}</div>
+      <div class="course-top">${ring(total ? done / total * 100 : 0, 46, `${done} of ${total} weeks done`)}<span class="subject">${esc(c.subject)}</span></div>
+      <div class="course-meta">${esc(c.board)} · ${esc(c.qualification)}${c.code ? ' · ' + esc(c.code) : ''}${c.tier ? ' · ' + esc(c.tier) : ''}${showStudent ? ` · <b>${esc(person(c.student_id).full_name)}</b>` : ''} · ${weeksUntil(c.exam_date)} weeks to go</div>
       ${late ? `<div class="behind-line"><span class="tag behind">Behind</span>${late} past week${late > 1 ? 's' : ''} not ticked done</div>` : ''}
       ${w ? `<div class="course-now"><span class="kind kind-${w.kind}">${w.kind === 'teach' ? 'This week' : w.kind === 'review' ? 'Review week' : w.kind === 'revision' ? 'Revision' : 'Break'}</span>${esc(w.title)}</div>` : ''}
       <div class="meter" role="img" aria-label="${done} of ${total} weeks done"><span style="width:${total ? Math.round(done / total * 100) : 0}%"></span></div>
