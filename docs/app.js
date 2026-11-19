@@ -393,7 +393,7 @@
             <label for="pw">Password <small>at least 8 characters</small><input id="pw" type="password" minlength="8" required autocomplete="new-password"></label>
             ${state.err ? `<p class="msg err">${esc(state.err)}</p>` : ''}
             <button class="btn primary lg" id="go">Create account</button>
-            <p class="small muted">${role === 'student' ? 'Joining a class or a parent? Use the code they gave you.' : 'Don\'t have a code? <a href="#request">Request an invite</a>.'}</p>
+            <p class="small muted">${role === 'student' ? 'Joining a class or a parent? Use the code they gave you. Studying on your own and don\'t have a code? <a href="#request">Request an invite</a>.' : 'Don\'t have a code? <a href="#request">Request an invite</a>.'}</p>
           </form>`}
       </div></div>`));
     app.querySelectorAll('[data-role]').forEach((b) => { b.onclick = () => signUpView({ role: b.dataset.role }); });
