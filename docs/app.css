@@ -396,3 +396,33 @@ details.other summary { cursor: pointer; font-weight: 600; color: var(--primary)
 .lu-reqs { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 8px; } .lu-reqs li { padding: 8px 10px; background: var(--surface-2); border-radius: 10px; }
 .lesson-update label.inline { display: block; } .lesson-update textarea { display: block; width: 100%; max-width: none; margin-top: 6px; } .lesson-update .row { margin-top: 10px; }
 .msg.info { background: color-mix(in srgb, var(--primary) 10%, var(--surface)); color: var(--ink); }
+
+/* Landing: example dashboard (laptop + phone) */
+.dh-wrap { position: relative; width: 100%; max-width: 1080px; margin: 8px auto 34px; height: 560px; color: #141a2e; font-family: Inter, system-ui, sans-serif; text-align: left; }
+.dh-stage { position: absolute; left: 0; top: 0; width: 1080px; height: 560px; transform-origin: top left; }
+.dh-desk { position: absolute; left: 0; top: 0; transform: scale(.86); transform-origin: top left; }
+.dh-mob { position: absolute; right: 0; top: 110px; }
+.dh-wrap i { font-style: normal; }
+@media (max-width: 699px) { .dh-wrap { height: auto; } .dh-stage { position: static; width: auto; height: auto; } .dh-desk { display: none; } .dh-mob { position: static; display: flex; justify-content: center; } }
+.dh-mock{background:#f6f4ef;border-radius:0 0 14px 14px;overflow:hidden;width:980px}
+.dh-m-head{display:flex;align-items:center;gap:22px;background:#fff;border-bottom:1px solid #e2dfd6;padding:12px 20px}
+.dh-m-logo{display:flex;align-items:center;gap:8px;font:700 16px Fraunces,serif}.dh-m-logo span{width:28px;height:28px;border-radius:7px;background:#f2b33d;display:grid;place-items:center;font:700 18px Fraunces}.dh-m-logo small{display:block;font:600 8px Inter;letter-spacing:.08em;color:#6b7280}
+.dh-m-nav{display:flex;gap:6px;font-size:13px;color:#4b5563}.dh-m-nav i{font-style:normal;padding:6px 10px;border-radius:8px}.dh-m-nav i.dh-on{background:#eeece6;color:#141a2e;font-weight:600}.dh-m-nav em{font-style:normal;background:#f2b33d;border-radius:99px;padding:0 6px;font-size:11px;font-weight:700}
+.dh-m-me{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}.dh-m-me span{width:30px;height:30px;border-radius:50%;background:#eeece6;display:grid;place-items:center;font-size:11px;color:#1f3a8a}.dh-m-me small{display:block;font-weight:400;color:#6b7280;font-size:11px}
+.dh-m-body{padding:20px 24px 24px}.dh-m-k{font:700 10px Inter;letter-spacing:.1em;color:#1f3a8a;margin:0 0 4px}.dh-m-h{font:700 28px Fraunces,serif;margin:0 0 14px}
+.dh-m-child{background:#fff;border:1px solid #e2dfd6;border-radius:14px;padding:16px}.dh-m-ch{display:flex;align-items:center;gap:10px;margin-bottom:12px}.dh-m-ch>span{width:36px;height:36px;border-radius:50%;background:#eeece6;display:grid;place-items:center;font-weight:700;color:#1f3a8a}.dh-m-ch small{display:block;color:#6b7280;font-size:12px}
+.dh-m-btns{margin-left:auto;display:flex;gap:8px}.dh-m-btns i{font-style:normal;font-size:12px;font-weight:600;border:1px solid #e2dfd6;border-radius:9px;padding:7px 11px}.dh-m-btns i.dh-p{background:#1f3a8a;color:#fff;border-color:#1f3a8a}
+.dh-m-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}.dh-m-stats>div{background:#f3f1ec;border:1px solid #e7e4dc;border-radius:11px;padding:10px 12px}.dh-m-stats .dh-hl{border:2px solid #f2b33d}.dh-m-stats small{display:block;font-size:11px;color:#6b7280}.dh-m-stats b{display:block;font-size:22px;margin:4px 0 2px}
+.dh-m-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.dh-mc{border:1px solid #e2dfd6;border-radius:12px;padding:12px;background:#fff}.dh-mc-top{display:flex;align-items:center;gap:8px}.dh-mc-top b{font-size:14px}.dh-mc-meta{font-size:11px;color:#6b7280;margin:8px 0}
+.dh-mc-now{font-size:12px;margin:8px 0}.dh-mc-now span{display:inline-block;background:#2f5bd3;color:#fff;border-radius:99px;padding:2px 7px;font-size:10px;font-weight:700;margin-bottom:5px;display:table}.dh-bar{height:5px;background:#eeece6;border-radius:9px}.dh-bar i{display:block;height:100%;border-radius:9px}
+.dh-beh{font-size:11px;color:#b3261e;display:flex;gap:6px;align-items:center}.dh-beh span{background:#fbe9e7;border-radius:99px;padding:1px 7px;font-weight:700;font-size:10px}
+.dh-browser{border-radius:14px;box-shadow:0 30px 60px -20px rgba(15,20,38,.35),0 0 0 1px rgba(15,20,38,.08);overflow:hidden;background:#fff;width:980px}
+.dh-b-bar{display:flex;align-items:center;gap:8px;padding:10px 14px;background:#eceae4}.dh-b-bar i{width:11px;height:11px;border-radius:50%;display:inline-block}.dh-b-url{margin-left:14px;background:#fff;border-radius:8px;padding:5px 12px;font-size:12px;color:#4b5563;flex:1;max-width:340px}
+.dh-phone{width:250px;border-radius:34px;background:#0f1426;padding:10px;box-shadow:0 30px 60px -20px rgba(15,20,38,.5)}.dh-ph-notch{width:80px;height:18px;background:#0f1426;border-radius:0 0 12px 12px;margin:-10px auto 0;position:relative;z-index:2}
+.dh-ph-in{background:#f6f4ef;border-radius:26px;padding:20px 12px 14px;margin-top:-14px}.dh-ph-in h4{font:700 15px Fraunces,serif;margin:8px 0}
+.dh-lc{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2dfd6;border-radius:10px;padding:8px;margin-bottom:7px;font-size:11px;position:relative;overflow:hidden}.dh-lc>i{position:absolute;left:0;top:0;bottom:0;width:4px}.dh-lc>div{padding-left:4px;flex:1}.dh-lc small{display:block;font-size:9px;font-weight:700;color:#6b7280}.dh-lc b{display:block;font-size:12px;margin:2px 0}
+.dh-pl{font-size:9px;font-weight:600;border:1px solid #e2dfd6;border-radius:99px;padding:3px 6px;white-space:nowrap;color:#6b7280}.dh-pl.dh-done{background:#e5f4ec;color:#1d7a4d;border-color:transparent}.dh-pl.dh-miss{background:#fbe9e7;color:#b3261e;border-color:#f1c4bf}
+.dh-quiz{background:#fff;border:2px solid #1f3a8a;border-radius:10px;padding:8px;font-size:11px;margin-top:8px}.dh-qo{border-radius:6px;padding:4px 6px;margin:4px 0}.dh-qo.dh-ok{background:#e5f4ec;color:#1d7a4d}.dh-qo.dh-bad{background:#fbe9e7;color:#b3261e}.dh-quiz small{color:#6b7280}
+.dh-stage{position:relative;display:flex;justify-content:center}
+.dh-cards4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:26px;opacity:.55}.dh-cards4 div{height:70px;border-radius:14px;background:#fff;border:1px solid #e2dfd6;padding:12px;font-size:12px;font-weight:700;color:#1f3a8a}
+.dh-float{position:absolute;background:#fff;border-radius:14px;box-shadow:0 20px 40px -14px rgba(15,20,38,.35);padding:12px 14px;font-size:12px}

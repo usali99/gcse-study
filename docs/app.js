@@ -317,6 +317,7 @@
       <div class="trust-strip"><span><b>5</b> exam boards</span><span><b>${C.SPECS.length}</b> ready-made specifications</span><span><b>GCSE</b> and International GCSE</span><span><b>&lt; 1 min</b> to build a plan</span></div>
       <section class="band">
         <h2 class="section-title">Everything a GCSE year needs, in one place</h2>
+        ${illoDashboard()}
         <div class="showcase">
           <article class="show show-blue"><p class="show-k">Build your plan</p><p class="show-t">Pick the board and specification for each subject, and Ninegrade builds a week-by-week plan to the exam.</p>${illoSubjects()}</article>
           <article class="show show-green"><p class="show-k">Study week by week</p><p class="show-t">Each week shows what to study in every subject, with progress you can see building towards the exam.</p>${illoPlan()}</article>
@@ -343,6 +344,7 @@
         </ol>
         <div class="cta center"><a class="btn primary lg" href="#signup">Create an account</a></div>
       </section>`)}`, { dark: true });
+    fitDashboard();
   }
 
   // ---------- sign in ----------
@@ -410,6 +412,32 @@
       } catch (x) { signUpView({ role, code: v('code'), err: x.message }); }
     };
   }
+
+
+  // Landing page: example dashboard (laptop + phone). All names and numbers are made up.
+  function illoDashboard() {
+    const dhRing=(p,s=54,c='#1f3a8a')=>{const r=s/2-5,C=2*Math.PI*r;return `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}"><circle cx="${s/2}" cy="${s/2}" r="${r}" fill="none" stroke="#ebe8e0" stroke-width="6"/><circle cx="${s/2}" cy="${s/2}" r="${r}" fill="none" stroke="${c}" stroke-width="6" stroke-linecap="round" stroke-dasharray="${C*p/100} ${C}" transform="rotate(-90 ${s/2} ${s/2})"/><text x="50%" y="54%" text-anchor="middle" dominant-baseline="middle" font-size="${s/4.2}" font-weight="700" fill="#141a2e" font-family="Inter">${p}%</text></svg>`};
+    const dhCourse=(sub,code,p,now,c,behind)=>`<div class="dh-mc"><div class="dh-mc-top">${dhRing(p,44,c)}<b>${sub}</b></div><div class="dh-mc-meta">${code}</div>${behind?'<div class="dh-beh"><span>Behind</span>1 week to catch up</div>':''}<div class="dh-mc-now"><span>This week</span>${now}</div><div class="dh-bar"><i style="width:${p}%;background:${c}"></i></div></div>`;
+    const dhHeader=`<div class="dh-m-head"><div class="dh-m-logo"><span>9</span><div>Ninegrade<small>GCSE PLAN</small></div></div><div class="dh-m-nav"><i class="dh-on">Dashboard</i><i>Marking <em>2</em></i><i>Lessons</i><i>Weak topics</i></div><div class="dh-m-me"><span>SM</span>Sarah M<small>Parent</small></div></div>`;
+    const dhDash=(o={})=>`<div class="dh-mock">${dhHeader}<div class="dh-m-body"><p class="dh-m-k">MONDAY 12 OCTOBER</p><h3 class="dh-m-h">Good morning, Sarah</h3>
+    <div class="dh-m-child"><div class="dh-m-ch"><span>A</span><div><b>Alex</b><small>4 courses</small></div><div class="dh-m-btns"><i>Weekly timetable</i><i class="dh-p">Add a course</i></div></div>
+    <div class="dh-m-stats"><div class="dh-hl"><small>Work to mark</small><b>2</b></div><div class="dh-hl"><small>Weeks to approve</small><b>1</b></div><div><small>Marked work</small><b>84%</b><small>12 pieces</small></div><div><small>Memory quizzes</small><b>91%</b><small>23 done</small></div></div>
+    <div class="dh-m-grid">${dhCourse('English Language','Edexcel · 1EN2 · 31 weeks to go',38,'Language analysis: AO2','#2f5bd3')}${dhCourse('Mathematics','AQA · 8300 · Higher',42,'Simultaneous equations','#c2410c',o.behind)}${dhCourse('Chemistry','OCR · J248 · Foundation',35,'Bonding and structure','#0f766e')}${dhCourse('Physics','Edexcel · 1PH0 · Foundation',40,'Energy transfers','#7c3aed')}</div></div></div></div>`;
+    const dhPhone=`<div class="dh-phone"><div class="dh-ph-notch"></div><div class="dh-ph-in"><p class="dh-m-k">TODAY · MON 12 OCT</p><h4>Today's lessons</h4>
+    <div class="dh-lc"><i style="background:#2f5bd3"></i><div><small style="color:#2f5bd3">ENGLISH</small><b>Language analysis</b><small>About 45 minutes</small></div><span class="dh-pl dh-done">Marked 7/8</span></div>
+    <div class="dh-lc"><i style="background:#c2410c"></i><div><small style="color:#c2410c">MATHS</small><b>Simultaneous equations</b><small>About 30 minutes</small></div><span class="dh-pl">Not started</span></div>
+    <h4>Still to send</h4><div class="dh-lc"><i style="background:#0f766e"></i><div><small style="color:#0f766e">CHEMISTRY · FRI</small><b>Ionic bonding</b><small>About 30 minutes</small></div><span class="dh-pl dh-miss">Missed</span></div>
+    <div class="dh-quiz"><b>Memory quiz</b><div class="dh-qo dh-ok">✓ 19th century</div><div class="dh-qo dh-bad">✗ The answer is <b>extract</b></div><small>Your last try: 4 / 5</small></div></div></div>`;
+    return `<div class="dh-wrap" id="dh-wrap" aria-label="Example: a parent's dashboard and a student's Today screen (sample data)" role="img"><div class="dh-stage" id="dh-stage">
+      <div class="dh-desk"><div class="dh-browser"><div class="dh-b-bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span class="dh-b-url">🔒 ninegrade.co.uk</span></div>${dhDash({ behind: true })}</div></div>
+      <div class="dh-mob">${dhPhone}</div></div></div>`;
+  }
+  function fitDashboard() {
+    const w = document.getElementById('dh-wrap'); const s = document.getElementById('dh-stage'); if (!w || !s) return;
+    if (window.innerWidth < 700) { s.style.transform = ''; w.style.height = ''; return; }
+    const k = Math.min(1, w.clientWidth / 1080); s.style.transform = `scale(${k})`; w.style.height = `${560 * k}px`;
+  }
+  window.addEventListener('resize', fitDashboard);
 
   // ---------- course cards and plan ----------
   const weekEnd = (start) => new Date(new Date(start + 'T12:00:00').getTime() + 7 * 864e5).toISOString().slice(0, 10);
