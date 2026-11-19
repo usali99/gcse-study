@@ -49,7 +49,13 @@ Mirror the changes in the subject's `weak-topics.md` in `/mnt/project-files/`.
 Write next week's lessons in `/mnt/project-files/lessons/week-NN/` in the same format as week 1
 (Markdown lesson + `-answers.md` + `quizzes.json` for the self-marking memory quizzes). Follow the timetable
 (Mon English + Maths, Tue English + Chemistry, Wed English + Physics, Thu English, Fri English; English is the
-main focus until April 2027; no mocks unless Usman asks). Bring back anything Hadi got wrong in this week's
+main focus until April 2027; no mocks unless Usman asks).
+
+**Tutor away, w/c 23 Nov, 30 Nov and 7 Dec 2026 (Usman, 19 Nov 2026):** every weekday Hadi does all four:
+English (45 min) + Maths (30 min) + Chemistry (30 min) + Physics (30 min), plus ICT (4IT1, 30 min) on Fridays only.
+Slots: a = English, b = Maths, c = Chemistry, d = Physics, e = ICT. Week 2's Thu/Fri English lessons (spelling, letter)
+already exist as drafts dated 26/27 Nov; keep them and add the other subjects alongside. Follow each course's plan
+topics on the site for Maths/Chem/Physics/ICT. Back to the normal timetable from Mon 14 Dec unless Usman says otherwise. Bring back anything Hadi got wrong in this week's
 memory quizzes and anything marked Weak. Memory quizzes (from week 2, Usman agreed 18 Nov 2026): mostly the lesson's own
 subject (in English lessons 3-4 of 5 English, 1-2 from other subjects), and label every other-subject question,
 e.g. "(Maths recap) What is 10% of 70?". Answer sheets say "For the parent only" and name no internal files. On the website, Hadi types answers or uploads photos, so the
