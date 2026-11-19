@@ -494,7 +494,7 @@
             <label for="e-exam">First exam date<input id="e-exam" type="date" value="${esc(c.exam_date)}" required></label>
             <label for="e-start">Start studying on<input id="e-start" type="date" value="${esc(c.start_date)}" required></label>
             <label for="e-hours">Study time per week (hours)<input id="e-hours" type="number" min="0.25" max="20" step="0.25" value="${esc(c.hours_per_week)}" required></label>
-            <div><button class="btn primary">Save and rebuild the plan</button></div></form></section>${lessonBox(c.student_id)}
+            <div><button class="btn primary">Save and rebuild the plan</button></div></form></section>${lessonHint(c.student_id)}
         <section class="panel"><div class="panel-head"><div><h2>Weeks</h2><p class="muted small">Rename a week, change its type, move it up or down, or tick it when it's done. Then press Save weeks.</p></div><button class="btn primary sm" id="save-weeks">Save weeks</button></div>
           <div id="e-msg">${msg || ''}</div>
           <ol class="wk-edit">${plan.map((w, i) => `<li class="kind-${w.kind}"><span class="wk-n">Wk ${w.n}<small>${fmt(w.start, { day: 'numeric', month: 'short' })}</small></span>
@@ -503,7 +503,6 @@
             <span class="wk-btns"><button class="btn ghost xs" data-up="${i}" ${i === 0 ? 'disabled' : ''} aria-label="Move week ${w.n} up">↑</button><button class="btn ghost xs" data-down="${i}" ${i === plan.length - 1 ? 'disabled' : ''} aria-label="Move week ${w.n} down">↓</button></span>
             <label class="done-box"><input type="checkbox" data-done="${i}" ${w.done ? 'checked' : ''}> Done</label></li>`).join('')}</ol>
           <div class="row" style="margin-top:12px"><button class="btn primary" id="save-weeks-2">Save weeks</button></div></section>`));
-      wireLessonBox(c.student_id);
       const grab = () => app.querySelectorAll('[data-title]').forEach((el) => { const w = plan[el.dataset.title]; w.title = el.value.trim() || w.title; w.kind = app.querySelector(`[data-kind="${el.dataset.title}"]`).value; w.done = app.querySelector(`[data-done="${el.dataset.title}"]`).checked; w.hours = w.kind === 'break' ? 0 : Number(c.hours_per_week); });
       const swap = (a, b) => { grab(); const keep = ['start', 'n', 'done']; const A = plan[a]; const B = plan[b]; const ca = {}; const cb = {};
         Object.keys(A).forEach((k) => { if (!keep.includes(k)) { ca[k] = A[k]; delete A[k]; } }); Object.keys(B).forEach((k) => { if (!keep.includes(k)) { cb[k] = B[k]; delete B[k]; } });
@@ -529,23 +528,30 @@
   // ---------- "Update next week's lessons" (only for a student who gets written lessons) ----------
   const hasLessons = (sid) => !!study.role && study.role === 'admin' && sid === (study.studentId() || (childrenOf(me.id)[0] || {}).id);
   const nextMonday = () => { const d = new Date(today() + 'T12:00:00'); const add = ((8 - d.getDay()) % 7) || 7; return new Date(d.getTime() + add * 864e5).toISOString().slice(0, 10); };
+  function lessonHint(sid) {
+    if (!hasLessons(sid)) return '';
+    return `<section class="panel lesson-update"><h2>Next week's lessons</h2><p class="muted small">After changing the plans, go to the <a href="#timetable-${esc(sid)}">Weekly timetable</a> and press <b>Update next week's lessons</b> once. One request covers every subject.</p></section>`;
+  }
   function lessonBox(sid) {
     if (!hasLessons(sid)) return '';
     const name = esc(person(sid).full_name.split(' ')[0] || 'your child');
     return `<section class="panel lesson-update" id="lu-box"><h2>Update next week's lessons</h2>
-      <p class="muted small">Changed the study time, days or topics? Ask for ${name}'s lessons for the week of ${fmt(nextMonday(), { day: 'numeric', month: 'long' })} to be rewritten to match. Requests are picked up every evening at about 5:40 PM. The new lessons arrive as drafts for you to approve. Lessons ${name} has already started are never changed.</p>
+      <p class="muted small">Changed the study time, days or topics of any subject? Press this once and all of ${name}'s lessons for the week of ${fmt(nextMonday(), { day: 'numeric', month: 'long' })} will be rewritten to match. Requests are picked up every evening at about 5:40 PM. The new lessons arrive as drafts for you to approve. Lessons ${name} has already started are never changed.</p>
       <label for="lu-note" class="inline">Anything to add? (optional)<textarea id="lu-note" rows="2" maxlength="500" placeholder="e.g. More Maths practice on fractions, less writing on Friday"></textarea></label>
-      <div class="row"><button class="btn primary" id="lu-send">Update next week's lessons</button></div><div id="lu-msg"></div><div id="lu-list" class="small muted"></div></section>`;
+      <div id="lu-wait"></div><div class="row"><button class="btn primary" id="lu-send">Update next week's lessons</button></div><div id="lu-msg"></div><div id="lu-list" class="small muted"></div></section>`;
   }
   async function wireLessonBox(sid) {
     const box = document.getElementById('lu-box'); if (!box) return;
     const list = async () => { const rs = await api.lessonRequests(sid); const el = document.getElementById('lu-list'); if (!el) return;
+      const waiting = (rs || []).some((r) => r.status === 'new'); const btn = document.getElementById('lu-send');
+      if (btn && !btn.disabled) btn.textContent = waiting ? 'Add another note' : "Update next week's lessons";
+      document.getElementById('lu-wait').innerHTML = waiting && !document.getElementById('lu-msg').textContent ? '<p class="msg ok">A request is already waiting for this evening. It covers every subject, so you don\'t need to press again unless you want to add a note.</p>' : '';
       el.innerHTML = rs && rs.length ? `<ul class="lu-reqs">${rs.map((r) => `<li><span class="tag ${r.status === 'done' ? 'ok' : ''}">${r.status === 'done' ? 'Done' : 'Waiting'}</span> Asked ${fmt(r.created_at.slice(0, 10), { weekday: 'short', day: 'numeric', month: 'short' })}${r.note ? ` · “${esc(r.note)}”` : ''}${r.reply ? `<br>${esc(r.reply)}` : r.status === 'new' ? '<br>Will be done this evening.' : ''}</li>`).join('')}</ul>` : ''; };
     document.getElementById('lu-send').onclick = async (e) => { const b = e.target; b.disabled = true; b.textContent = 'Sending…';
       try { await api.requestLessons(sid, document.getElementById('lu-note').value.trim()); document.getElementById('lu-note').value = '';
-        document.getElementById('lu-msg').innerHTML = '<p class="msg ok">Request sent. Next week\'s lessons will be rewritten this evening, and you\'ll see them as drafts on the Lessons page.</p>'; }
+        document.getElementById('lu-msg').innerHTML = '<p class="msg ok">Sent. Next week\'s lessons for every subject will be rewritten this evening, and you\'ll see them as drafts on the Lessons page.</p>'; }
       catch (x) { document.getElementById('lu-msg').innerHTML = `<p class="msg err">${esc(x.message)}</p>`; }
-      b.disabled = false; b.textContent = "Update next week's lessons"; list(); };
+      b.disabled = false; list(); };
     list();
   }
   function timetablePage(sid) {

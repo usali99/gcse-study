@@ -104,7 +104,7 @@ List what was fixed in the summary.
 The parent can press **Update next week's lessons** on the Weekly timetable or Edit plan page. It adds a row to
 `lesson_requests` (student_id, note, status 'new'). Each run:
 
-1. `node tools/db.mjs get "lesson_requests?status=eq.new&order=created_at"`. If there are none, do nothing here.
+1. `node tools/db.mjs get "lesson_requests?status=eq.new&order=created_at"`. If there are none, do nothing here. Several requests for the same student are handled together as one rewrite (combine their notes) and all are marked done.
 2. Read the courses fresh (see section 4) and the parent's note. "Next week" = the Mon–Fri starting the coming Monday
    (on a Sunday that is tomorrow).
 3. Rewrite that week's lessons to match: keep any lesson Hadi has already started (has a quiz attempt or submission) exactly
