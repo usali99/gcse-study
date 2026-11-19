@@ -489,7 +489,7 @@
             ${spec && spec.tiers ? `<label for="e-tier">Tier<select id="e-tier">${spec.tiers.map((t) => `<option ${t === c.tier ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>` : ''}
             <label for="e-exam">First exam date<input id="e-exam" type="date" value="${esc(c.exam_date)}" required></label>
             <label for="e-start">Start studying on<input id="e-start" type="date" value="${esc(c.start_date)}" required></label>
-            <label for="e-hours">Study time per week (hours)<input id="e-hours" type="number" min="0.5" max="20" step="0.5" value="${esc(c.hours_per_week)}" required></label>
+            <label for="e-hours">Study time per week (hours)<input id="e-hours" type="number" min="0.25" max="20" step="0.25" value="${esc(c.hours_per_week)}" required></label>
             <div><button class="btn primary">Save and rebuild the plan</button></div></form></section>
         <section class="panel"><div class="panel-head"><div><h2>Weeks</h2><p class="muted small">Rename a week, change its type, move it up or down, or tick it when it's done. Then press Save weeks.</p></div><button class="btn primary sm" id="save-weeks">Save weeks</button></div>
           <div id="e-msg">${msg || ''}</div>
