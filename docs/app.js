@@ -251,18 +251,50 @@
   }
   function shell(route, inner, opts = {}) {
     const nav = navFor();
+    // Only the everyday tabs sit on the bar. Everything else (Invite codes, Exam boards, owner pages and any new tab
+    // added later) goes under "More", so the bar never needs scrolling (Usman, 20 Nov 2026).
+    const MAIN = ['home', 'today', 'lessons', 'progress', 'marking', 'topics', 'practice'];
+    const main = nav.filter(([r]) => MAIN.includes(r)); const more = nav.filter(([r]) => !MAIN.includes(r));
+    const moreBadge = more.some(([, t]) => t.includes('class="count"')) ? ` <span class="count">${(more.map(([, t]) => (t.match(/class="count">(\d+)/) || [])[1]).filter(Boolean).reduce((a, b) => a + Number(b), 0))}</span>` : '';
+    const navHtml = `${main.map(([r, t]) => `<a href="#${r}" ${route === r ? 'aria-current="page"' : ''}>${t}</a>`).join('')}${more.length ? `<details class="nav-more"><summary ${more.some(([r]) => r === route) ? 'aria-current="page"' : ''}>More${moreBadge}<span class="caret" aria-hidden="true">▾</span></summary><div class="more-menu" role="menu">${more.map(([r, t]) => `<a role="menuitem" href="#${r}" ${route === r ? 'aria-current="page"' : ''}>${t}</a>`).join('')}</div></details>` : ''}`;
     app.innerHTML = `
       <header class="bar ${opts.dark ? 'bar-dark' : ''}"><div class="bar-in">
         <a class="logo" href="#${me ? 'home' : ''}"><span class="logo-mark" aria-hidden="true">9</span><span class="logo-words">Ninegrade<small>GCSE Plan</small></span></a>
-        ${nav.length ? `<nav class="nav" aria-label="Main">${nav.map(([r, t]) => `<a href="#${r}" ${route === r ? 'aria-current="page"' : ''}>${t}</a>`).join('')}</nav>` : '<span class="grow"></span>'}
+        ${nav.length ? `<nav class="nav" aria-label="Main">${navHtml}</nav>` : '<span class="grow"></span>'}
         ${me ? `<div class="me"><a class="me-link" href="#account" title="My account" ${route === 'account' ? 'aria-current="page"' : ''}><span class="avatar" aria-hidden="true">${esc(initials(me.full_name))}</span><span class="me-name">${esc(me.full_name)}<small>${me.is_platform_admin && D && !childrenOf(me.id).length ? 'Owner' : `${me.role ? ROLE[me.role] : ''}${me.is_platform_admin ? ' · owner' : ''}`}${api.demo ? ' · preview' : ''}</small></span></a><button class="btn ghost sm" id="signout">Sign out</button></div>`
           : `<div class="me"><a class="btn ghost sm" href="#signin">Sign in</a><a class="btn accent sm" href="#signup">Get started</a></div>`}
       </div></header>
       ${inner}
       <footer class="foot"><div class="foot-in"><span>Ninegrade GCSE Plan · invite-only beta</span><span>Plans follow the exam boards' published specifications. Always check dates with your exam centre.</span></div></footer>`;
+    fitNav(); if (document.fonts && document.fonts.status !== 'loaded') document.fonts.ready.then(fitNav);
+    if (!window.ngMoreWired) { window.ngMoreWired = true; const cur = () => app.querySelector('.nav-more[open]');
+      document.addEventListener('click', (e) => { const d = cur(); if (d && !d.contains(e.target)) d.open = false; });
+      document.addEventListener('keydown', (e) => { const d = cur(); if (e.key === 'Escape' && d) { d.open = false; d.querySelector('summary').focus(); } });
+      window.addEventListener('scroll', () => { const d = cur(); if (d) d.open = false; }, { passive: true });
+      let rt; window.addEventListener('resize', () => { const d = cur(); if (d) d.open = false; clearTimeout(rt); rt = setTimeout(fitNav, 150); }); }
     const so = document.getElementById('signout');
     if (so) so.onclick = async () => { await api.signOut(); study.forget(); me = null; location.hash = ''; render(); };
     window.scrollTo(0, 0);
+  }
+  // On narrow screens, move tabs from the end of the bar into More until the bar fits without scrolling.
+  function fitNav() {
+    const nav = app.querySelector('.nav'); if (!nav) return;
+    let dm = nav.querySelector('.nav-more');
+    if (dm) dm.querySelectorAll('.more-menu a[data-moved]').forEach((a) => { a.removeAttribute('data-moved'); a.removeAttribute('role'); dm.before(a); });
+    const links = () => [...nav.querySelectorAll(':scope > a')];
+    nav.scrollLeft = 0;
+    while (nav.scrollWidth > nav.clientWidth + 1 && links().length > 1) {
+      if (!dm) { nav.insertAdjacentHTML('beforeend', '<details class="nav-more"><summary>More<span class="caret" aria-hidden="true">▾</span></summary><div class="more-menu" role="menu"></div></details>'); dm = nav.querySelector('.nav-more'); continue; }
+      const a = links().pop(); a.dataset.moved = 1; a.setAttribute('role', 'menuitem'); dm.querySelector('.more-menu').prepend(a);
+    }
+    if (dm && !dm.dataset.wired) { dm.dataset.wired = 1; const menu = dm.querySelector('.more-menu');
+      const place = () => { const r = dm.querySelector('summary').getBoundingClientRect(); const w = menu.offsetWidth || 200;
+        menu.style.top = `${r.bottom + 6}px`; menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - w - 8))}px`; };
+      dm.addEventListener('toggle', () => { if (dm.open) place(); });
+      menu.addEventListener('click', () => { dm.open = false; }); }
+    if (dm) { const sum = dm.querySelector('summary'); if (dm.querySelector('.more-menu a[aria-current]')) sum.setAttribute('aria-current', 'page'); else sum.removeAttribute('aria-current');
+      const n = [...dm.querySelectorAll('.more-menu .count')].reduce((t, c) => t + (Number(c.textContent) || 0), 0); const old = sum.querySelector(':scope > .count'); if (old) old.remove();
+      if (n) sum.querySelector('.caret').insertAdjacentHTML('beforebegin', ` <span class="count">${n}</span>`); }
   }
   const page = (inner, cls = '') => `<main class="page ${cls}">${inner}</main>`;
 

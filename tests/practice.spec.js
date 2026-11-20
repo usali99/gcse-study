@@ -2,7 +2,7 @@ const { test, expect, signIn, signOut, go, noSideScroll } = require('./helpers')
 
 test('parent asks for a practice set, checks a draft with its answer sheet and assigns it', async ({ page }) => {
   await signIn(page, 'usman');
-  await expect(page.locator('.nav a', { hasText: 'Practice' })).toBeVisible();
+  await expect(page.locator('.nav a', { hasText: 'Practice' })).toHaveCount(1); // on the bar, or under More on a phone
   await go(page, '#pnew-hadi');
   await page.uncheck('input[name=kind][value=quiz]');
   await page.click('#p-go');
