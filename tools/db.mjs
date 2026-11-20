@@ -6,6 +6,7 @@
 //   node tools/db.mjs get <table> [postgrest query]          e.g. get submissions "mark=is.null&order=created_at"
 //   node tools/db.mjs patch <table> <postgrest filter> '<json>'   e.g. patch submissions "id=eq.4" '{"mark":6,"mark_max":8,"feedback":"..."}'
 //   node tools/db.mjs upsert <table> <json file or json> [on_conflict column]
+//   node tools/db.mjs delete-files <bucket> <path> [path...]   remove uploaded files (bank papers 30 days after saving)
 //   node tools/db.mjs download <storage path> <out file> [bucket]   a file someone uploaded (bucket "work" by default; "practice" for practice sets)
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 
@@ -58,8 +59,14 @@ try {
     if (!r.ok) throw new Error(`download ${a}: ${r.status} ${await r.text()}`);
     writeFileSync(b, Buffer.from(await r.arrayBuffer()));
     console.log(`Saved ${b}`);
+  } else if (cmd === 'delete-files') {
+    // delete-files <bucket> <path> [path...]: remove uploaded files from storage (bank uploads 30 days after saving).
+    const paths = [b, c, ...process.argv.slice(6)].filter(Boolean);
+    const r = await fetch(`${URL_}/storage/v1/object/${a}`, { method: 'DELETE', headers: H, body: JSON.stringify({ prefixes: paths }) });
+    if (!r.ok) throw new Error(`delete ${a}: ${r.status} ${await r.text()}`);
+    console.log(`Deleted ${(await r.json()).length} of ${paths.length} file(s) from ${a}`);
   } else {
-    console.error('Commands: push-week, seed-topics, get, patch, upsert, download (see top of file).');
+    console.error('Commands: push-week, seed-topics, get, patch, upsert, download, delete-files (see top of file).');
     process.exit(1);
   }
 } catch (e) { console.error(e.message); process.exit(1); }

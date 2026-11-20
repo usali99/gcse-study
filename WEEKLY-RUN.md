@@ -259,6 +259,14 @@ Parents and teachers add papers straight to the bank ("Add a paper"). For every 
 - An 11+ child's lessons, practice and marking follow the 11+ test in their course (`board` = Kent Test, GL, CSSE,
   ISEB), Year 5 to 6 level, 20 to 30 minute sessions.
 
+### Delete bank uploads after 30 days (evening run; v2-bank-files.sql; Usman chose 20 Nov 2026)
+For every `bank_papers` row with `status=ready`, `files_removed_at` null, `ready_at` older than 30 days and any
+`q_files`/`a_files`: check the paper has its `bank_questions` and `bank_answers` saved, then
+`node tools/db.mjs delete-files practice <path> [path...]` for all its q_files and a_files, and patch the paper:
+`q_files={}`, `a_files={}`, `files_removed_at=now`. Never delete anything else (practice set uploads, students' work),
+and never before 30 days unless Usman asks in the website thread (then list the files first). Mention the count in the
+run summary ("Removed 6 uploaded files from 2 saved papers").
+
 ### Original and similar questions (v2-bank-similar.sql; Usman, 20 Nov 2026)
 Every paper added to the bank is `kind=original` (the questions as uploaded). Whenever a run writes SIMILAR NEW questions
 (a practice set with `as_is=false`, a "Make another like this" set, or a bank set whose note says "SIMILAR NEW questions"):
