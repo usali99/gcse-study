@@ -122,3 +122,44 @@ The parent can press **Update next week's lessons** on the Weekly timetable or E
    plain sentences, e.g. "Done. Week of 23 Nov now has Maths, Chemistry and Physics every day (30 min each). Please approve
    it on the Lessons page.").
 5. Mention it in the run's summary to Usman.
+
+
+## Practice sets (both runs, Sun–Fri evening and Saturday)
+
+Parents, teachers and self-study students make **practice sets** on the Practice page (table `practice_sets`,
+needs supabase/v2-practice.sql). Each one says the `kind` (lesson / quiz / practice / mock), `subject`, optional
+`title`, `minutes`, `due_date`, `note` (instructions, and "Changes: …" when they asked for changes), and the material:
+`source_text` and/or `source_files` (paths in the private "practice" storage bucket). `based_on` = "Make another like this":
+make a fresh version of that set with NEW questions, same level and length, unless the note says otherwise.
+
+### Make the requested sets
+1. `node tools/db.mjs get "practice_sets?status=eq.requested&order=created_at"`. None: skip.
+2. Read the material. Files: `node tools/db.mjs download "<path>" /tmp/p/<name> practice` then read it (PDF/photo/Word).
+   For `based_on`, also read the earlier set (`get "practice_sets?id=eq.<id>"`) and its answers
+   (`get "practice_answers?set_id=eq.<id>"`). Check the student's weak topics where it helps (Hadi: `get weak_topics`).
+3. Write the set to match the kind, at the student's tier (from their courses), in UK English, short chunks:
+   - **lesson**: like a weekly lesson (Learn it, worked examples, exam tip, Your turn questions with marks), 20–40 min.
+   - **quiz**: a short intro or reminder in `body_html`, and 5–12 self-marking questions in `quiz` (same JSON as weekly
+     quizzes: `mc` with `options` + `answer` index, `num` with `answer` (+ `tol`), `short` with `accept` list; optional `explain`).
+   - **practice**: exam-style questions with marks shown, numbered, in `body_html`; 3–6 warm-up `quiz` questions optional.
+   - **mock**: a full timed paper: instructions box (time allowed = `minutes`, total marks), numbered questions with marks.
+     If they uploaded a real past paper, base the mock on its structure and style, but write NEW questions unless the
+     note asks to use the paper as it is.
+   Never put answers in `body_html` or `quiz` explanations of written questions. `body_html` is shown as-is: use simple
+   HTML (h2, h3, p, ol, ul, table, b, i), no scripts, no images from outside.
+4. Write the answer sheet (mark scheme with marks, model answers, common mistakes) "For the parent only."
+5. Save: `upsert practice_answers '[{"set_id":"<id>","body_html":"…"}]' set_id`, then
+   `patch practice_sets "id=eq.<id>" '{"status":"draft","title":"…","minutes":N,"body_html":"…","quiz":[…],"reply":"…"}'`.
+   `reply` = one or two sentences for the parent ("Made from your worksheet: 10 questions on fractions of amounts, about
+   20 minutes. Check the mark scheme, then assign it."). If the material can't be read or isn't enough, leave the status
+   `requested` and patch only `reply` saying what's needed (the parent sees it on the set's page); mention it in the summary.
+   Never set status `assigned`: the parent assigns.
+
+### Mark practice tries
+1. `get "practice_attempts?mark=is.null&order=created_at"`. Quiz-only sets (kind quiz) mark themselves: patch
+   `mark`=`quiz_score`, `mark_max`=`quiz_max`, short feedback only if useful, `marked_at`.
+2. Otherwise mark against the answer sheet like weekly work (photos: `download "<path>" <out> practice`). Several tries
+   of the same set are separate attempts: mark each, and say what improved since the last try.
+3. `patch practice_attempts "id=eq.<id>" '{"mark":…,"mark_max":…,"feedback":"…","marked_at":"<now>"}'`. Feedback is
+   for the student (kind, numbered, what to fix). Update weak topics from Hadi's practice like weekly work.
+4. Add practice made and marked to the run's summary.

@@ -447,3 +447,23 @@ details.mw > summary small { font-weight: 400; }
 details.wk-fold > summary { cursor: pointer; font-size: .875rem; font-weight: 600; color: var(--ink-2); margin: 4px 0 0; width: max-content; }
 details.wk-fold[open] > summary { margin-bottom: 4px; }
 details.wk-fold:not([open]) .when-open, details.wk-fold[open] .when-closed { display: none; }
+
+/* Practice sets */
+.pset-card { display: grid; grid-template-columns: 6px 1fr auto; gap: 14px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; text-decoration: none; color: var(--ink); overflow: hidden; padding-right: 14px; margin-top: 10px; min-height: 64px; }
+.pset-card:hover { border-color: var(--primary); }
+.pset-card .stripe { align-self: stretch; background: var(--line); }
+.pset-card .stripe.kind-lesson { background: var(--teach); } .pset-card .stripe.kind-quiz { background: var(--primary); }
+.pset-card .stripe.kind-practice { background: var(--ok); } .pset-card .stripe.kind-mock { background: var(--review); }
+.pset-card .lc-body { display: grid; gap: 2px; padding: 10px 0; min-width: 0; }
+.pset-card .subj { font-size: .75rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.pset-card .lc-title { font-weight: 600; }
+.kind-pick { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kind-pick legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
+.kind-opt { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: start; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; background: var(--surface); }
+.kind-opt input { width: auto; min-height: 0; margin-top: 4px; grid-row: span 2; }
+.kind-opt span { color: var(--ink-2); font-size: .85rem; font-weight: 400; }
+.kind-opt:has(input:checked) { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 7%, var(--surface)); }
+.ok-text { color: var(--ok); }
+details.panel > summary { cursor: pointer; }
+.narrow-field { max-width: 180px; }
+@media (max-width: 640px) { .kind-pick { grid-template-columns: 1fr; } }

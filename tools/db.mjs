@@ -6,7 +6,7 @@
 //   node tools/db.mjs get <table> [postgrest query]          e.g. get submissions "mark=is.null&order=created_at"
 //   node tools/db.mjs patch <table> <postgrest filter> '<json>'   e.g. patch submissions "id=eq.4" '{"mark":6,"mark_max":8,"feedback":"..."}'
 //   node tools/db.mjs upsert <table> <json file or json> [on_conflict column]
-//   node tools/db.mjs download <storage path> <out file>    a photo Hadi uploaded (bucket "work")
+//   node tools/db.mjs download <storage path> <out file> [bucket]   a file someone uploaded (bucket "work" by default; "practice" for practice sets)
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 
 // The service key normally arrives as a network secret: the cloud proxy adds
@@ -53,7 +53,8 @@ try {
     const rows = readJson(b);
     console.log(JSON.stringify(await rest('POST', `${a}${c ? '?on_conflict=' + c : ''}`, rows, 'resolution=merge-duplicates,return=representation'), null, 1));
   } else if (cmd === 'download') {
-    const r = await fetch(`${URL_}/storage/v1/object/work/${a}`, { headers: H });
+    const bucket = c || 'work';
+    const r = await fetch(`${URL_}/storage/v1/object/${bucket}/${a.split('/').map(encodeURIComponent).join('/')}`, { headers: H });
     if (!r.ok) throw new Error(`download ${a}: ${r.status} ${await r.text()}`);
     writeFileSync(b, Buffer.from(await r.arrayBuffer()));
     console.log(`Saved ${b}`);
