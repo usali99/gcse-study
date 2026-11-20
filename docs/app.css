@@ -426,3 +426,17 @@ details.other summary { cursor: pointer; font-weight: 600; color: var(--primary)
 .dh-stage{position:relative;display:flex;justify-content:center}
 .dh-cards4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:26px;opacity:.55}.dh-cards4 div{height:70px;border-radius:14px;background:#fff;border:1px solid #e2dfd6;padding:12px;font-size:12px;font-weight:700;color:#1f3a8a}
 .dh-float{position:absolute;background:#fff;border-radius:14px;box-shadow:0 20px 40px -14px rgba(15,20,38,.35);padding:12px 14px;font-size:12px}
+
+/* Subject filter chips (progress + marking) */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+.chip { font: inherit; font-size: .9rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; min-height: 36px; }
+.chip span { font-size: .75rem; font-weight: 700; background: var(--surface-2); border-radius: 999px; padding: 1px 7px; color: var(--muted); }
+.chip:hover { border-color: var(--ink); }
+.chip.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.chip.on span { background: rgba(255,255,255,.2); color: inherit; }
+details.mw > summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+details.mw > summary::-webkit-details-marker { display: none; }
+details.mw > summary .mw-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-weight: 600; }
+details.mw > summary .mw-title::before { content: "▸"; color: var(--muted); transition: transform .15s; }
+details.mw[open] > summary .mw-title::before { transform: rotate(90deg); }
+details.mw > summary small { font-weight: 400; }

@@ -58,7 +58,8 @@
         { id: 'd4', week: 2, lesson_date: iso(6), slot: 'a', subject: 'english', title: 'Language analysis', minutes: 40, body_html: body('Technique, quote, effect.'), quiz, status: 'draft' }],
       sheets: { d1: '<h2>Answers</h2><p>Accept any four facts from lines 1 to 8.</p>', d2: '<h2>Answers</h2><p>Example answers.</p>', d3: '<h2>Answers</h2><p>1. 30 2. 45</p>', d4: '<h2>Answers</h2><p>Technique, quote, effect.</p>' },
       attempts: [{ lesson_id: 'd1', score: 1, max: 2, answers: [{ given: 1, right: true }, { given: 'extrakt', right: false }], created_at: new Date().toISOString() }],
-      subs: [{ id: 1, lesson_id: 'd1', answer_text: 'It is on the north coast of Kent. You travel by steamer...', files: [], minutes_taken: 6, created_at: new Date().toISOString(), mark: 9, mark_max: 9, feedback: 'Excellent work: full marks. Next time write four short numbered points.' }],
+      subs: [{ id: 1, lesson_id: 'd1', answer_text: 'It is on the north coast of Kent. You travel by steamer...', files: [], minutes_taken: 6, created_at: new Date().toISOString(), mark: 9, mark_max: 9, feedback: 'Excellent work: full marks. Next time write four short numbered points.' },
+        { id: 2, lesson_id: 'd3', answer_text: '1. 30  2. 40', files: [], minutes_taken: 12, created_at: new Date(Date.now() - 864e5).toISOString(), mark: 1, mark_max: 2, feedback: 'Q1 is right. Q2: 15% of 300 is 30 + 15 = 45. Find 10%, then half of it for 5%.' }],
       topics: [{ id: 1, subject: 'english', skill: 'Finding information', paper_q: 'P1 Q1', status: 'Improving', evidence: '4/4 twice', sort: 1 }, { id: 2, subject: 'english', skill: 'Sentence control', paper_q: 'Writing', status: 'Weak', evidence: 'Run-on sentences', sort: 2 }, { id: 3, subject: 'maths', skill: 'Percentages', paper_q: 'P1', status: 'Not yet tested', evidence: '', sort: 1 }],
     });
     let S = read() || seed(); const save = () => write(S);
@@ -304,14 +305,35 @@
             <td>${admin ? `<select data-topic="${t.id}" aria-label="Status for ${esc(t.skill)}">${TOPIC_STATUSES.map((x) => `<option ${x === t.status ? 'selected' : ''}>${x}</option>`).join('')}</select>` : `<span class="pill st-${t.status.split(' ')[0]}">${esc(t.status)}</span>`}</td>
             ${admin ? `<td><input data-evidence="${t.id}" value="${esc(t.evidence)}" placeholder="e.g. Wk1 Mon 3/4" aria-label="Evidence"></td>` : ''}</tr>`).join('')}</tbody></table></div></section>`; }).join('');
     }
+    // Subject filter chips, shared by the progress and marking pages.
+    let subjPick = 'all';
+    function subjChips(counts) {
+      const keys = ['all', ...Object.keys(SUBJECTS).filter((k) => counts[k])];
+      if (keys.length < 3) return '';
+      return `<div class="chips" role="group" aria-label="Show subject">${keys.map((k) => `<button type="button" class="chip ${k === subjPick ? 'on' : ''}" data-subj="${k}" aria-pressed="${k === subjPick}">${k === 'all' ? 'All' : SUBJECTS[k]}<span>${counts[k]}</span></button>`).join('')}</div>`;
+    }
+    function subjCounts(list) { const c = { all: list.length }; list.forEach((x) => { c[x] = (c[x] || 0) + 1; }); return c; }
+    const subjOf = (lessonId) => (D.byId[lessonId] || {}).subject || '';
     async function progressView() {
-      const topics = await api.topics(); const done = D.lessons.filter((l) => prog(l.id).sent).length;
-      const best = D.lessons.map((l) => prog(l.id).best).filter(Boolean); const q = best.length ? pct(best.reduce((a, b) => a + b.score, 0), best.reduce((a, b) => a + b.max, 0)) : null;
-      const marked = D.subs.filter((s) => s.mark != null);
+      const allTopics = await api.topics();
+      const counts = subjCounts(D.lessons.map((l) => l.subject));
+      if (subjPick !== 'all' && !counts[subjPick]) subjPick = 'all';
+      const inSubj = (subj) => subjPick === 'all' || subj === subjPick;
+      const lessons = D.lessons.filter((l) => inSubj(l.subject));
+      const done = lessons.filter((l) => prog(l.id).sent).length;
+      const best = lessons.map((l) => prog(l.id).best).filter(Boolean); const q = best.length ? pct(best.reduce((a, b) => a + b.score, 0), best.reduce((a, b) => a + b.max, 0)) : null;
+      const marked = D.subs.filter((s) => s.mark != null && inSubj(subjOf(s.lesson_id)));
+      const topics = allTopics.filter((t) => inSubj(t.subject));
+      const name = subjPick === 'all' ? '' : SUBJECTS[subjPick] + ' '; const cap = (t) => (name ? name + t : t[0].toUpperCase() + t.slice(1));
+      const item = (s, i) => { const l = D.byId[s.lesson_id] || {};
+        return `<details class="mw" ${i === 0 ? 'open' : ''}><summary><span class="mw-title">${subjPick === 'all' && l.subject ? `<span class="subj ${l.subject}">${SUBJECTS[l.subject]}</span> ` : ''}${esc(l.title || s.lesson_id)}<small class="muted">${new Date(s.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</small></span><span class="pill done">${s.mark} / ${s.mark_max}</span></summary>
+          <p class="small"><a href="#lesson-${esc(s.lesson_id)}">Open the lesson</a></p>${s.feedback ? `<div class="feedback">${esc(s.feedback)}</div>` : '<p class="muted small">No written feedback.</p>'}</details>`; };
       shell('progress', page(`<div class="narrow"><div class="page-head"><p class="kicker dark">My progress</p><h1>How it's going</h1></div>
-        <div class="stats"><div class="stat"><span>Lessons with work sent</span><b>${done} of ${D.lessons.length}</b></div><div class="stat"><span>Memory quizzes</span><b>${q == null ? '–' : q + '%'}</b></div><div class="stat"><span>Work marked</span><b>${marked.length}</b></div></div>
-        <section class="panel"><h2>Marked work</h2>${marked.length ? marked.map((s) => `<div class="mw"><div class="panel-head"><a href="#lesson-${esc(s.lesson_id)}">${esc((D.byId[s.lesson_id] || {}).title || s.lesson_id)}</a><span class="pill done">${s.mark} / ${s.mark_max}</span></div>${s.feedback ? `<div class="feedback">${esc(s.feedback)}</div>` : ''}</div>`).join('') : '<p class="muted">Nothing marked yet. Your marks and feedback will appear here.</p>'}</section>
+        ${subjChips(counts)}
+        <div class="stats"><div class="stat"><span>${cap('lessons with work sent')}</span><b>${done} of ${lessons.length}</b></div><div class="stat"><span>${cap('memory quizzes')}</span><b>${q == null ? '–' : q + '%'}</b></div><div class="stat"><span>${cap('work marked')}</span><b>${marked.length}</b></div></div>
+        <section class="panel"><h2>Marked work</h2>${marked.length ? (marked.length > 1 ? '<p class="muted small">The newest is open. Tap any other one to read its feedback.</p>' : '') + marked.map(item).join('') : `<p class="muted">No ${name}work marked yet. Your marks and feedback will appear here.</p>`}</section>
         ${topicsHtml(topics, false)}</div>`));
+      app.querySelectorAll('[data-subj]').forEach((b) => { b.onclick = () => { subjPick = b.dataset.subj; progressView(); }; });
     }
     async function topicsView() {
       const topics = await api.topics();
@@ -321,15 +343,20 @@
       app.querySelectorAll('[data-evidence]').forEach((i) => { i.onchange = () => api.updateTopic(Number(i.dataset.evidence), { evidence: i.value }).then(() => saved(true, 'Saved.'), (x) => saved(false, x.message)); });
     }
     function markingView(filter) {
-      filter = filter || 'todo'; const list = D.subs.filter((s) => (filter === 'todo' ? s.mark == null : s.mark != null));
+      filter = filter || 'todo'; const byFilter = D.subs.filter((s) => (filter === 'todo' ? s.mark == null : s.mark != null));
+      const counts = subjCounts(byFilter.map((s) => subjOf(s.lesson_id)));
+      if (subjPick !== 'all' && !counts[subjPick]) subjPick = 'all';
+      const list = byFilter.filter((s) => subjPick === 'all' || subjOf(s.lesson_id) === subjPick);
       shell('marking', page(`<div class="page-head"><p class="kicker dark">Hadi</p><h1>Marking</h1><p class="muted">Claude marks new work every weekday evening and at the Saturday run. You can also mark or change anything here, using the answer sheet.</p></div>
         <div class="row" style="margin-bottom:16px"><button class="btn ${filter === 'todo' ? 'primary' : 'ghost'} sm" data-filter="todo">To mark (${toMark()})</button><button class="btn ${filter === 'done' ? 'primary' : 'ghost'} sm" data-filter="done">Marked (${D.subs.length - toMark()})</button></div>
+        ${subjChips(counts)}
         ${list.length ? list.map((s) => { const l = D.byId[s.lesson_id] || { title: s.lesson_id, subject: '' }; return `<section class="panel"><p class="kicker dark"><span class="subj ${l.subject}">${SUBJECTS[l.subject] || ''}</span></p><h2><a href="#lesson-${esc(s.lesson_id)}">${esc(l.title)}</a></h2><p class="small"><a href="#lesson-${esc(s.lesson_id)}">Open the lesson to see his quiz answers and the full lesson</a></p>
           ${subView(s, `<details data-sheet="${esc(s.lesson_id)}" class="other"><summary>Show the answer sheet</summary><div class="lesson answers"><p class="muted">Loading…</p></div></details>
             <form class="mark-form" data-mark="${s.id}"><label for="m-${s.id}">Mark<input type="number" id="m-${s.id}" min="0" value="${s.mark ?? ''}" required></label><label for="mm-${s.id}">Out of<input type="number" id="mm-${s.id}" min="1" value="${s.mark_max ?? ''}" required></label>
             <label for="fb-${s.id}" class="grow">Feedback for Hadi<textarea id="fb-${s.id}" rows="3">${esc(s.feedback || '')}</textarea></label><button class="btn primary" type="submit">Save mark</button></form>`)}</section>`; }).join('')
           : `<section class="panel"><p class="muted">${filter === 'todo' ? 'Nothing waiting. When Hadi sends work, it appears here.' : 'Nothing marked yet.'}</p></section>`}`));
-      app.querySelectorAll('[data-filter]').forEach((b) => { b.onclick = () => markingView(b.dataset.filter); });
+      app.querySelectorAll('[data-filter]').forEach((b) => { b.onclick = () => { subjPick = 'all'; markingView(b.dataset.filter); }; });
+      app.querySelectorAll('[data-subj]').forEach((b) => { b.onclick = () => { subjPick = b.dataset.subj; markingView(filter); }; });
       app.querySelectorAll('details[data-sheet]').forEach((d) => { d.addEventListener('toggle', async () => { if (d.open && !d.dataset.loaded) { d.dataset.loaded = 1; d.querySelector('.lesson').innerHTML = (await api.answerSheet(d.dataset.sheet)) || 'No answer sheet.'; } }); });
       app.querySelectorAll('form[data-mark]').forEach((f) => { f.onsubmit = async (e) => { e.preventDefault(); const id = Number(f.dataset.mark); const b = f.querySelector('button'); b.disabled = true; b.textContent = 'Saving…';
         try { await api.mark(id, { mark: Number(f.querySelector(`#m-${id}`).value), mark_max: Number(f.querySelector(`#mm-${id}`).value), feedback: f.querySelector(`#fb-${id}`).value.trim() || null }); await load(); markingView(filter); }
