@@ -4,6 +4,9 @@ test('parent asks for a practice set, checks a draft with its answer sheet and a
   await signIn(page, 'usman');
   await expect(page.locator('.nav a', { hasText: 'Practice' })).toBeVisible();
   await go(page, '#pnew-hadi');
+  await page.uncheck('input[name=kind][value=quiz]');
+  await page.click('#p-go');
+  await expect(page.locator('#p-msg')).toContainText('Tick at least one');
   await page.check('input[name=kind][value=practice]');
   await page.click('#p-go');
   await expect(page.locator('#p-msg')).toContainText('Paste some text');
@@ -102,4 +105,14 @@ test('a student with a parent cannot make practice sets', async ({ page }) => {
   await expect(page.locator('a[href^="#pnew-"]')).toHaveCount(0);
   await go(page, '#pnew-hadi');
   await expect(page.locator('#pform')).toHaveCount(0);
+});
+
+test('ticking all four makes four sets from one upload', async ({ page }) => {
+  await signIn(page, 'usman');
+  await go(page, '#pnew-hadi');
+  for (const k of ['lesson', 'practice', 'mock']) await page.check(`input[name=kind][value=${k}]`);
+  await page.fill('#p-text', 'Topic: rounding and estimating');
+  await page.click('#p-go');
+  await expect(page.locator('#flash')).toContainText('Sent 4 requests');
+  await expect(page.locator('.panel', { hasText: 'Being prepared' }).locator('.pset-card')).toHaveCount(5);
 });

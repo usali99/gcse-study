@@ -42,7 +42,7 @@
         async set(id) { return must(await sb.from('practice_sets').select('*').eq('id', id).maybeSingle()); },
         async answers(id) { const r = await sb.from('practice_answers').select('body_html').eq('set_id', id).maybeSingle(); return r.data ? r.data.body_html : null; },
         async attempts(setId) { let q = sb.from('practice_attempts').select('*').order('created_at', { ascending: false }); if (setId) q = q.eq('set_id', setId); return must(await q); },
-        async create(s, files) { const source_files = [...(s.source_files || []), ...(await up('sources/' + Date.now(), files))]; must(await sb.from('practice_sets').insert({ ...s, source_files })); },
+        async create(s, files) { const source_files = [...(s.source_files || []), ...(await up('sources/' + Date.now(), files))]; must(await sb.from('practice_sets').insert({ ...s, source_files })); return source_files; },
         async update(id, patch) { must(await sb.from('practice_sets').update(patch).eq('id', id)); },
         async remove(id) { must(await sb.from('practice_sets').delete().eq('id', id)); },
         async addAttempt(a, files) { const paths = await up('work/' + a.set_id + '/' + Date.now(), files); must(await sb.from('practice_attempts').insert({ ...a, files: paths })); },
@@ -76,7 +76,7 @@
         async answers(id) { return staffOfSet(id) ? S.answers[id] || null : null; },
         async attempts(setId) { return S.attempts.filter((a) => (!setId || a.set_id === setId) && (a.student_id === me().id || isStaffFor(a.student_id))); },
         async create(s, files) { if (!canEdit(s.student_id)) throw new Error('You can only make practice for your own students.');
-          S.sets.unshift({ ...s, id: 'ps' + Date.now(), created_by: me().id, status: 'requested', body_html: '', quiz: [], reply: '', source_files: [...(s.source_files || []), ...files.map((f) => `${me().id}/sources/${f.name}`)], created_at: new Date().toISOString(), updated_at: new Date().toISOString() }); save(); },
+          S.sets.unshift({ ...s, id: 'ps' + Date.now(), created_by: me().id, status: 'requested', body_html: '', quiz: [], reply: '', source_files: [...(s.source_files || []), ...files.map((f) => `${me().id}/sources/${f.name}`)], created_at: new Date().toISOString(), updated_at: new Date().toISOString() }); save(); return S.sets[0].source_files; },
         async update(id, patch) { const s = S.sets.find((x) => x.id === id); if (!s || !canEdit(s.student_id)) throw new Error('You can only change your own students\' practice.');
           if (patch.status === 'assigned' && !s.body_html) throw new Error('This set is not ready yet.'); Object.assign(s, patch, { updated_at: new Date().toISOString() }); save(); },
         async remove(id) { S.sets = S.sets.filter((x) => x.id !== id); save(); },
@@ -162,7 +162,7 @@
       shell('practice', page(`<div class="narrow"><div class="page-head"><a class="small" href="#${like ? 'pset-' + esc(like.id) : 'practice-' + esc(sid)}">← ${like ? 'Back to the set' : 'Practice'}</a><p class="kicker dark">${self ? 'For you' : `For ${esc(first(st))}`}</p><h1>${like ? 'Make another like this' : 'New practice set'}</h1>
         ${like ? `<p class="muted">Ninegrade makes a fresh version of <b>${esc(titleOf(like))}</b> with new questions, from the same material. Say if you want anything different.</p>` : ''}</div>
         <form id="pform" class="form panel">
-          <fieldset class="kind-pick"><legend>What would you like?</legend>${Object.entries(KINDS).map(([k, [t, d]]) => `<label class="kind-opt"><input type="radio" name="kind" value="${k}" ${k === k0 ? 'checked' : ''}><b>${t}</b><span>${d}</span></label>`).join('')}</fieldset>
+          <fieldset class="kind-pick"><legend>What would you like? <small>Tick one or more. Each one becomes its own set from the same material.</small></legend>${Object.entries(KINDS).map(([k, [t, d]]) => `<label class="kind-opt"><input type="checkbox" name="kind" value="${k}" ${k === k0 ? 'checked' : ''}><b>${t}</b><span>${d}</span></label>`).join('')}</fieldset>
           <label for="p-subj">Subject<input id="p-subj" list="p-subjects" required maxlength="60" value="${esc(like ? like.subject : subjects[0] || '')}" autocomplete="off"><datalist id="p-subjects">${subjects.map((s) => `<option value="${esc(s)}">`).join('')}</datalist></label>
           <label for="p-title">Title <small>optional, e.g. Fractions of amounts</small><input id="p-title" maxlength="120" value="${esc(like ? (like.title ? like.title.replace(/ \(version \d+\)$/, '') + ' (version 2)' : '') : '')}"></label>
           ${like ? '' : `<label for="p-text">Paste text <small>a worksheet, notes, questions or a topic list</small><textarea id="p-text" rows="8" maxlength="50000" placeholder="Paste here, or upload files below"></textarea></label>
@@ -177,14 +177,21 @@
         const v = (id) => (document.getElementById(id) ? document.getElementById(id).value.trim() : '');
         const files = like ? [] : [...document.getElementById('p-files').files];
         const text = v('p-text'); const note = v('p-note');
+        const kinds = [...document.querySelectorAll('input[name=kind]:checked')].map((x) => x.value);
+        if (!kinds.length) { msg.innerHTML = '<p class="msg err">Tick at least one: Lesson, Quiz, Practice questions or Mock exam.</p>'; return; }
         if (!like && !text && !files.length && note.length < 15) { msg.innerHTML = '<p class="msg err">Paste some text, upload a file, or describe the topic in the instructions.</p>'; return; }
         if (files.length > 10) { msg.innerHTML = '<p class="msg err">Please upload 10 files or fewer.</p>'; return; }
         const big = files.find((f) => f.size > 15 * 1024 * 1024); if (big) { msg.innerHTML = `<p class="msg err">${esc(big.name)} is over 15 MB. Try a smaller photo or split the PDF.</p>`; return; }
         b.disabled = true; b.textContent = files.length ? 'Uploading…' : 'Sending…';
         try {
-          await api.create({ student_id: sid, subject: v('p-subj'), kind: (document.querySelector('input[name=kind]:checked') || {}).value || 'quiz', title: v('p-title'),
-            source_text: like ? like.source_text || '' : text, source_files: like ? like.source_files || [] : [], note, minutes: v('p-min') ? Number(v('p-min')) : null, due_date: v('p-due') || null, based_on: like ? like.id : null }, files);
-          ctx.flashText = 'Sent. Ninegrade will prepare it at the next evening run, and it will appear under "Ready for you to check".';
+          let src = like ? like.source_files || [] : []; let up = files;
+          const mins = v('p-min') ? Number(v('p-min')) : null;
+          for (const kind of kinds) {
+            src = await api.create({ student_id: sid, subject: v('p-subj'), kind, title: v('p-title'), source_text: like ? like.source_text || '' : text, source_files: src, note,
+              minutes: kinds.length > 1 && kind === 'quiz' ? null : mins, due_date: v('p-due') || null, based_on: like ? like.id : null }, up);
+            up = []; // files are uploaded once and shared by every set made from them
+          }
+          ctx.flashText = kinds.length > 1 ? `Sent ${kinds.length} requests (${kinds.map(kindName).join(', ')}). Ninegrade will prepare them at the next evening run, and they will appear under "Ready for you to check".` : 'Sent. Ninegrade will prepare it at the next evening run, and it will appear under "Ready for you to check".';
           await refreshCounts(); location.hash = '#practice-' + sid;
         } catch (x) { b.disabled = false; b.textContent = 'Send'; msg.innerHTML = `<p class="msg err">${esc(nice(x))}</p>`; }
       };

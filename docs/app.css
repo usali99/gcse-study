@@ -467,3 +467,4 @@ details.wk-fold:not([open]) .when-open, details.wk-fold[open] .when-closed { dis
 details.panel > summary { cursor: pointer; }
 .narrow-field { max-width: 180px; }
 @media (max-width: 640px) { .kind-pick { grid-template-columns: 1fr; } }
+.kind-pick legend small { display: block; font-weight: 400; color: var(--muted); font-size: .85rem; margin-top: 2px; }
