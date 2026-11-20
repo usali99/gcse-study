@@ -135,7 +135,7 @@
     }
     function requestsBlock(list, atts) {
       if (!list.length) return '';
-      return `<section class="panel"><h2>Being made for you</h2><p class="muted small">Claude prepares new sets every weekday evening (about 5:40 PM). Check a "Ready to check" set, then assign it.</p>${list.map((s) => setCard(s, atts)).join('')}</section>`;
+      return `<section class="panel"><h2>Being made for you</h2><p class="muted small">Ninegrade prepares new sets every weekday evening (about 5:40 PM). Check a "Ready to check" set, then assign it.</p>${list.map((s) => setCard(s, atts)).join('')}</section>`;
     }
     async function managePage(sid) {
       if (!canEdit(sid)) return shell('practice', page(`<div class="narrow"><div class="page-head"><a class="small" href="#practice">← Practice</a><h1>Practice</h1></div>${ctx.setByNote(sid)}</div>`));
@@ -145,10 +145,10 @@
       const group = (status) => sets.filter((s) => s.status === status);
       const sec = (status, title, help) => { const l = group(status); return l.length ? `<section class="panel"><h2>${title} <span class="count">${l.length}</span></h2>${help ? `<p class="muted small">${help}</p>` : ''}${l.map((s) => setCard(s, atts)).join('')}</section>` : ''; };
       shell('practice', page(`<div class="narrow"><div class="page-head">${myStudents().length > 1 ? '<a class="small" href="#practice">← All students</a>' : ''}<p class="kicker dark">Practice</p><h1>${self ? 'My practice sets' : `Practice for ${esc(first(st))}`}</h1>
-        <p class="muted">Paste text or upload a worksheet, notes or a past paper, and choose what to make from it. Claude prepares it at the evening run (weekdays, about 5:40 PM). You check it, then assign it.</p>
+        <p class="muted">Paste text or upload a worksheet, notes or a past paper, and choose what to make from it. Ninegrade prepares it at the evening run (weekdays, about 5:40 PM). You check it, then assign it.</p>
         <div class="row"><a class="btn primary" href="#pnew-${esc(sid)}">New practice set</a></div></div><div id="flash"></div>
         ${sec('draft', 'Ready for you to check', `Open each one, read it with its answer sheet, then press Assign to send it to ${self ? 'yourself' : esc(first(st))}.`)}
-        ${sec('requested', 'Being prepared', 'Claude makes these at the next evening run.')}
+        ${sec('requested', 'Being prepared', 'Ninegrade makes these at the next evening run.')}
         ${sec('assigned', self ? 'Assigned' : `Assigned to ${esc(first(st))}`, '')}
         ${group('archived').length ? `<details class="panel"><summary><b>Archived</b> (${group('archived').length})</summary>${group('archived').map((s) => setCard(s, atts)).join('')}</details>` : ''}
         ${!sets.length ? `<section class="panel"><div class="empty"><b>No practice sets yet</b><span>Make the first one from a worksheet, notes, or a topic ${self ? 'you want' : `${esc(first(st))} needs`} to practise.</span><a class="btn primary sm" href="#pnew-${esc(sid)}">New practice set</a></div></section>` : ''}</div>`));
@@ -160,18 +160,18 @@
       const subjects = [...new Set(D().courses.filter((c) => c.student_id === sid).map((c) => c.subject))];
       const k0 = like ? like.kind : 'quiz';
       shell('practice', page(`<div class="narrow"><div class="page-head"><a class="small" href="#${like ? 'pset-' + esc(like.id) : 'practice-' + esc(sid)}">← ${like ? 'Back to the set' : 'Practice'}</a><p class="kicker dark">${self ? 'For you' : `For ${esc(first(st))}`}</p><h1>${like ? 'Make another like this' : 'New practice set'}</h1>
-        ${like ? `<p class="muted">Claude makes a fresh version of <b>${esc(titleOf(like))}</b> with new questions, from the same material. Say if you want anything different.</p>` : ''}</div>
+        ${like ? `<p class="muted">Ninegrade makes a fresh version of <b>${esc(titleOf(like))}</b> with new questions, from the same material. Say if you want anything different.</p>` : ''}</div>
         <form id="pform" class="form panel">
           <fieldset class="kind-pick"><legend>What would you like?</legend>${Object.entries(KINDS).map(([k, [t, d]]) => `<label class="kind-opt"><input type="radio" name="kind" value="${k}" ${k === k0 ? 'checked' : ''}><b>${t}</b><span>${d}</span></label>`).join('')}</fieldset>
           <label for="p-subj">Subject<input id="p-subj" list="p-subjects" required maxlength="60" value="${esc(like ? like.subject : subjects[0] || '')}" autocomplete="off"><datalist id="p-subjects">${subjects.map((s) => `<option value="${esc(s)}">`).join('')}</datalist></label>
           <label for="p-title">Title <small>optional, e.g. Fractions of amounts</small><input id="p-title" maxlength="120" value="${esc(like ? (like.title ? like.title.replace(/ \(version \d+\)$/, '') + ' (version 2)' : '') : '')}"></label>
           ${like ? '' : `<label for="p-text">Paste text <small>a worksheet, notes, questions or a topic list</small><textarea id="p-text" rows="8" maxlength="50000" placeholder="Paste here, or upload files below"></textarea></label>
           <label for="p-files">Or upload files <small>photos, PDF, Word or text files, up to 10 files of 15 MB each</small><input id="p-files" type="file" multiple accept="image/*,application/pdf,.doc,.docx,.txt,.rtf,.odt"></label>`}
-          <label for="p-note">${like ? 'Anything to change?' : 'Instructions for Claude'} <small>optional</small><textarea id="p-note" rows="3" maxlength="1000" placeholder="${like ? 'e.g. A bit harder, and more questions on Q3 type' : 'e.g. Foundation tier, 10 questions, focus on the questions he got wrong'}"></textarea></label>
+          <label for="p-note">${like ? 'Anything to change?' : 'Instructions'} <small>optional</small><textarea id="p-note" rows="3" maxlength="1000" placeholder="${like ? 'e.g. A bit harder, and more questions on Q3 type' : 'e.g. Foundation tier, 10 questions, focus on the questions he got wrong'}"></textarea></label>
           <div class="row form-row"><label for="p-min">Time to spend <small>minutes, optional</small><input id="p-min" type="number" min="5" max="240" step="5" value="${like && like.minutes ? like.minutes : ''}"></label>
             <label for="p-due">Due date <small>optional</small><input id="p-due" type="date" min="${ctx.today()}"></label></div>
-          <div id="p-msg"></div><button class="btn primary lg" id="p-go">Send to Claude</button>
-          <p class="muted small">It will be ready to check after the next evening run (weekdays, about 5:40 PM). ${self ? '' : `${esc(first(st))} won't see it until you assign it.`} Uploads stay private to you${self ? '' : ' and Claude'}.</p></form></div>`));
+          <div id="p-msg"></div><button class="btn primary lg" id="p-go">Send</button>
+          <p class="muted small">It will be ready to check after the next evening run (weekdays, about 5:40 PM). ${self ? '' : `${esc(first(st))} won't see it until you assign it.`} Uploads stay private.</p></form></div>`));
       document.getElementById('pform').onsubmit = async (e) => {
         e.preventDefault(); const msg = document.getElementById('p-msg'); const b = document.getElementById('p-go');
         const v = (id) => (document.getElementById(id) ? document.getElementById(id).value.trim() : '');
@@ -184,9 +184,9 @@
         try {
           await api.create({ student_id: sid, subject: v('p-subj'), kind: (document.querySelector('input[name=kind]:checked') || {}).value || 'quiz', title: v('p-title'),
             source_text: like ? like.source_text || '' : text, source_files: like ? like.source_files || [] : [], note, minutes: v('p-min') ? Number(v('p-min')) : null, due_date: v('p-due') || null, based_on: like ? like.id : null }, files);
-          ctx.flashText = 'Sent. Claude will prepare it at the next evening run, and it will appear under "Ready for you to check".';
+          ctx.flashText = 'Sent. Ninegrade will prepare it at the next evening run, and it will appear under "Ready for you to check".';
           await refreshCounts(); location.hash = '#practice-' + sid;
-        } catch (x) { b.disabled = false; b.textContent = 'Send to Claude'; msg.innerHTML = `<p class="msg err">${esc(nice(x))}</p>`; }
+        } catch (x) { b.disabled = false; b.textContent = 'Send'; msg.innerHTML = `<p class="msg err">${esc(nice(x))}</p>`; }
       };
     }
 
@@ -241,8 +241,8 @@
       // ----- staff (or self-study student managing their own set) -----
       if (staff && (s.status !== 'assigned' || !isStudent)) {
         const actions = {
-          requested: `<p>Claude will make this at the next evening run (weekdays, about 5:40 PM).</p>${s.note ? `<p class="small"><b>Your instructions:</b> ${esc(s.note)}</p>` : ''}<div class="row"><button class="btn ghost sm" data-pact="delete">Cancel this request</button></div>`,
-          draft: `<p>Read it below${isStudent ? '' : ' with the answer sheet'}. If it looks right, assign it. If not, tell Claude what to change.</p>
+          requested: `<p>Ninegrade will make this at the next evening run (weekdays, about 5:40 PM).</p>${s.note ? `<p class="small"><b>Your instructions:</b> ${esc(s.note)}</p>` : ''}<div class="row"><button class="btn ghost sm" data-pact="delete">Cancel this request</button></div>`,
+          draft: `<p>Read it below${isStudent ? '' : ' with the answer sheet'}. If it looks right, assign it. If not, say what to change.</p>
             <div class="row"><button class="btn primary" data-pact="assign">Assign to ${esc(nm)}</button><button class="btn ghost" data-pact="changes">Ask for changes</button><button class="btn ghost sm" data-pact="delete">Delete</button></div>`,
           assigned: `<p>${esc(isStudent ? 'You can' : first(st) + ' can')} see this now and try it as many times as needed.</p><div class="row"><a class="btn primary sm" href="#plike-${esc(s.id)}">Make another like this</a><button class="btn ghost sm" data-pact="unassign">Take it back</button><button class="btn ghost sm" data-pact="archive">Archive</button></div>`,
           archived: `<div class="row"><button class="btn ghost sm" data-pact="assign">Assign again</button><a class="btn ghost sm" href="#plike-${esc(s.id)}">Make another like this</a></div>`,
@@ -253,7 +253,7 @@
           ${s.body_html || (s.quiz || []).length ? `<section class="panel"><h2>What ${esc(nm)} will see</h2><div class="lesson">${s.body_html}</div>
             ${(s.quiz || []).length ? `<h3>Quick questions (mark themselves)</h3><ol class="small">${s.quiz.map((q, i) => `<li>${esc(q.q)} <b class="ok-text">→ ${esc(quizKey(s.quiz)[i])}</b></li>`).join('')}</ol>` : ''}</section>` : ''}
           ${!isStudent && s.status !== 'requested' ? `<details class="panel" id="pans"><summary><b>Answer sheet</b> <span class="muted small">(${esc(first(st))} never sees this)</span></summary><div class="lesson answers"><p class="muted">Loading…</p></div></details>` : ''}
-          ${!isStudent && atts.length ? `<section class="panel"><h2>${esc(first(st))}'s tries <span class="count">${atts.length}</span></h2><p class="muted small">Claude marks written answers at the evening run. You can also mark or change anything here.</p>${atts.map((a) => attemptHtml(a, s, true)).join('')}</section>` : ''}
+          ${!isStudent && atts.length ? `<section class="panel"><h2>${esc(first(st))}'s tries <span class="count">${atts.length}</span></h2><p class="muted small">Ninegrade marks written answers at the evening run. You can also mark or change anything here.</p>${atts.map((a) => attemptHtml(a, s, true)).join('')}</section>` : ''}
           <details class="panel"><summary><b>What it was made from</b></summary>${s.source_text ? `<div class="answer-text">${esc(s.source_text.slice(0, 3000))}${s.source_text.length > 3000 ? '…' : ''}</div>` : ''}${srcFiles}${s.note ? `<p class="small"><b>Instructions:</b> ${esc(s.note)}</p>` : ''}${!s.source_text && !srcFiles && !s.note ? '<p class="muted small">Nothing was given.</p>' : ''}${s.based_on ? `<p class="small"><a href="#pset-${esc(s.based_on)}">See the earlier version</a></p>` : ''}</details></div>`));
         const out = document.getElementById('pact-out');
         const go = async (patch, msg, after) => { try { await api.update(s.id, patch); await refreshCounts(); if (msg) ctx.flashText = msg; after ? after() : setPage(s.id); } catch (x) { out.innerHTML = `<p class="msg err">${esc(nice(x))}</p>`; } };
@@ -263,9 +263,9 @@
           if (a === 'unassign') return go({ status: 'draft' });
           if (a === 'archive') return go({ status: 'archived' });
           if (a === 'delete') { b.disabled = true; try { await api.remove(s.id); ctx.flashText = 'Deleted.'; location.hash = '#practice-' + s.student_id; } catch (x) { out.innerHTML = `<p class="msg err">${esc(nice(x))}</p>`; } return; }
-          if (a === 'changes') { out.innerHTML = `<form class="form" id="pchg"><label for="pchg-t">What should Claude change?<textarea id="pchg-t" rows="3" maxlength="900" required placeholder="e.g. Make questions 3 to 5 easier, and add a worked example"></textarea></label><button class="btn primary sm">Send to Claude</button></form>`;
+          if (a === 'changes') { out.innerHTML = `<form class="form" id="pchg"><label for="pchg-t">What should change?<textarea id="pchg-t" rows="3" maxlength="900" required placeholder="e.g. Make questions 3 to 5 easier, and add a worked example"></textarea></label><button class="btn primary sm">Send</button></form>`;
             document.getElementById('pchg-t').focus();
-            document.getElementById('pchg').onsubmit = (e) => { e.preventDefault(); const t = 'Changes: ' + document.getElementById('pchg-t').value.trim(); const n = (s.note ? s.note + '\n' : '') + t; go({ status: 'requested', note: n.length > 1000 ? t.slice(0, 1000) : n }, 'Sent. Claude will make the changes at the next evening run.'); }; }
+            document.getElementById('pchg').onsubmit = (e) => { e.preventDefault(); const t = 'Changes: ' + document.getElementById('pchg-t').value.trim(); const n = (s.note ? s.note + '\n' : '') + t; go({ status: 'requested', note: n.length > 1000 ? t.slice(0, 1000) : n }, 'Sent. Ninegrade will make the changes at the next evening run.'); }; }
         }; });
         const det = document.getElementById('pans');
         if (det) det.addEventListener('toggle', async () => { if (det.open && !det.dataset.loaded) { det.dataset.loaded = 1; det.querySelector('.lesson').innerHTML = (await api.answers(s.id).catch(() => null)) || '<p class="muted">No answer sheet for this set.</p>'; } });

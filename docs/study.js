@@ -250,7 +250,7 @@
         ${admin && l.status === 'draft' ? '<p class="msg warn">Draft: Hadi can\'t see this lesson until you approve its week on the Lessons page.</p>' : ''}
         <article class="lesson" id="lesson-body">${l.body_html}</article>
         <p class="report-row">Spotted a mistake in this lesson? ${report({ place: 'lesson', ref: l.id, context: l.title })}</p>
-        ${admin ? hadiWork(l) + '<section class="panel"><details class="other"><summary>Answer sheet for this lesson (only parents see this)</summary><p class="muted small">The right answers and marking guide. Claude uses it to mark Hadi\'s work, and you can use it to check a mark.</p><div class="lesson answers" id="answer-sheet"><p class="muted">Loading the answer sheet…</p></div></details></section>' : `
+        ${admin ? hadiWork(l) + '<section class="panel"><details class="other"><summary>Answer sheet for this lesson (only parents see this)</summary><p class="muted small">The right answers and marking guide. Ninegrade uses it to mark Hadi\'s work, and you can use it to check a mark.</p><div class="lesson answers" id="answer-sheet"><p class="muted">Loading the answer sheet…</p></div></details></section>' : `
         <section class="panel" id="send"><h2>Send your work</h2>${p.subs.map((s) => subView(s)).join('')}
           <p class="muted">${p.marked ? 'Want to send a better answer after reading the feedback? Type it below and press Send again.' : p.sent ? 'Spotted a mistake, or want to add something? Type the new or extra answer below and press <b>Send again</b>. Everything you send for this lesson is marked together.' : 'The Your turn questions are already in the box below. Type each answer after <b>Answer:</b>, or take photos of your page. Then press Send.'}</p>
           <form id="sendform" class="form">
@@ -367,7 +367,7 @@
       filter = filter || 'todo'; const byFilter = D.subs.filter((s) => (filter === 'todo' ? s.mark == null : s.mark != null));
       const counts = subjCounts(byFilter.map((s) => subjOf(s.lesson_id)));
       const list = byFilter.filter((s) => subjPick === 'all' || subjOf(s.lesson_id) === subjPick);
-      shell('marking', page(`<div class="page-head"><p class="kicker dark">Hadi</p><h1>Marking</h1><p class="muted">Claude marks new work every weekday evening and at the Saturday run. You can also mark or change anything here, using the answer sheet.</p></div>
+      shell('marking', page(`<div class="page-head"><p class="kicker dark">Hadi</p><h1>Marking</h1><p class="muted">Ninegrade marks new work every weekday evening and at the Saturday run. You can also mark or change anything here, using the answer sheet.</p></div>
         <div class="row" style="margin-bottom:16px"><button class="btn ${filter === 'todo' ? 'primary' : 'ghost'} sm" data-filter="todo">To mark (${toMark()})</button><button class="btn ${filter === 'done' ? 'primary' : 'ghost'} sm" data-filter="done">Marked (${D.subs.length - toMark()})</button></div>
         ${subjChips(counts)}
         ${list.length ? list.map((s) => { const l = D.byId[s.lesson_id] || { title: s.lesson_id, subject: '' }; return `<section class="panel"><p class="kicker dark"><span class="subj ${l.subject}">${SUBJECTS[l.subject] || ''}</span></p><h2><a href="#lesson-${esc(s.lesson_id)}">${esc(l.title)}</a></h2><p class="small"><a href="#lesson-${esc(s.lesson_id)}">Open the lesson to see his quiz answers and the full lesson</a></p>
