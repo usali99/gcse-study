@@ -308,16 +308,16 @@
     // Subject filter chips, shared by the progress and marking pages.
     let subjPick = 'all';
     function subjChips(counts) {
-      const keys = ['all', ...Object.keys(SUBJECTS).filter((k) => counts[k])];
+      const has = new Set(D.lessons.map((l) => l.subject));
+      const keys = ['all', ...Object.keys(SUBJECTS).filter((k) => counts[k] || has.has(k))];
       if (keys.length < 3) return '';
-      return `<div class="chips" role="group" aria-label="Show subject">${keys.map((k) => `<button type="button" class="chip ${k === subjPick ? 'on' : ''}" data-subj="${k}" aria-pressed="${k === subjPick}">${k === 'all' ? 'All' : SUBJECTS[k]}<span>${counts[k]}</span></button>`).join('')}</div>`;
+      return `<div class="chips" role="group" aria-label="Show subject">${keys.map((k) => `<button type="button" class="chip ${k === subjPick ? 'on' : ''}" data-subj="${k}" aria-pressed="${k === subjPick}">${k === 'all' ? 'All' : SUBJECTS[k]}<span>${counts[k] || 0}</span></button>`).join('')}</div>`;
     }
     function subjCounts(list) { const c = { all: list.length }; list.forEach((x) => { c[x] = (c[x] || 0) + 1; }); return c; }
     const subjOf = (lessonId) => (D.byId[lessonId] || {}).subject || '';
     async function progressView() {
       const allTopics = await api.topics();
       const counts = subjCounts(D.lessons.map((l) => l.subject));
-      if (subjPick !== 'all' && !counts[subjPick]) subjPick = 'all';
       const inSubj = (subj) => subjPick === 'all' || subj === subjPick;
       const lessons = D.lessons.filter((l) => inSubj(l.subject));
       const done = lessons.filter((l) => prog(l.id).sent).length;
@@ -336,8 +336,11 @@
       app.querySelectorAll('[data-subj]').forEach((b) => { b.onclick = () => { subjPick = b.dataset.subj; progressView(); }; });
     }
     async function topicsView() {
-      const topics = await api.topics();
-      shell('topics', page(`<div class="page-head"><p class="kicker dark">Hadi</p><h1>Weak topics</h1><p class="muted">Changes save straight away. Hadi sees the status but can't change it. Marking runs update these from his work.</p></div><div id="topic-msg"></div>${topicsHtml(topics, true)}`));
+      const all = await api.topics();
+      const topics = all.filter((t) => subjPick === 'all' || t.subject === subjPick);
+      shell('topics', page(`<div class="page-head"><p class="kicker dark">Hadi</p><h1>Weak topics</h1><p class="muted">Changes save straight away. Hadi sees the status but can't change it. Marking runs update these from his work.</p></div>
+        ${subjChips(subjCounts(all.map((t) => t.subject)))}<div id="topic-msg"></div>${topics.length ? topicsHtml(topics, true) : `<section class="panel"><p class="muted">No ${SUBJECTS[subjPick] || ''} topics yet.</p></section>`}`));
+      app.querySelectorAll('[data-subj]').forEach((b) => { b.onclick = () => { subjPick = b.dataset.subj; topicsView(); }; });
       const saved = (ok, t) => { document.getElementById('topic-msg').innerHTML = `<p class="msg ${ok ? 'ok' : 'err'}">${esc(t)}</p>`; };
       app.querySelectorAll('[data-topic]').forEach((s) => { s.onchange = () => api.updateTopic(Number(s.dataset.topic), { status: s.value, last_tested: today() }).then(() => saved(true, 'Saved.'), (x) => saved(false, x.message)); });
       app.querySelectorAll('[data-evidence]').forEach((i) => { i.onchange = () => api.updateTopic(Number(i.dataset.evidence), { evidence: i.value }).then(() => saved(true, 'Saved.'), (x) => saved(false, x.message)); });
@@ -345,7 +348,6 @@
     function markingView(filter) {
       filter = filter || 'todo'; const byFilter = D.subs.filter((s) => (filter === 'todo' ? s.mark == null : s.mark != null));
       const counts = subjCounts(byFilter.map((s) => subjOf(s.lesson_id)));
-      if (subjPick !== 'all' && !counts[subjPick]) subjPick = 'all';
       const list = byFilter.filter((s) => subjPick === 'all' || subjOf(s.lesson_id) === subjPick);
       shell('marking', page(`<div class="page-head"><p class="kicker dark">Hadi</p><h1>Marking</h1><p class="muted">Claude marks new work every weekday evening and at the Saturday run. You can also mark or change anything here, using the answer sheet.</p></div>
         <div class="row" style="margin-bottom:16px"><button class="btn ${filter === 'todo' ? 'primary' : 'ghost'} sm" data-filter="todo">To mark (${toMark()})</button><button class="btn ${filter === 'done' ? 'primary' : 'ghost'} sm" data-filter="done">Marked (${D.subs.length - toMark()})</button></div>
@@ -354,7 +356,7 @@
           ${subView(s, `<details data-sheet="${esc(s.lesson_id)}" class="other"><summary>Show the answer sheet</summary><div class="lesson answers"><p class="muted">Loading…</p></div></details>
             <form class="mark-form" data-mark="${s.id}"><label for="m-${s.id}">Mark<input type="number" id="m-${s.id}" min="0" value="${s.mark ?? ''}" required></label><label for="mm-${s.id}">Out of<input type="number" id="mm-${s.id}" min="1" value="${s.mark_max ?? ''}" required></label>
             <label for="fb-${s.id}" class="grow">Feedback for Hadi<textarea id="fb-${s.id}" rows="3">${esc(s.feedback || '')}</textarea></label><button class="btn primary" type="submit">Save mark</button></form>`)}</section>`; }).join('')
-          : `<section class="panel"><p class="muted">${filter === 'todo' ? 'Nothing waiting. When Hadi sends work, it appears here.' : 'Nothing marked yet.'}</p></section>`}`));
+          : `<section class="panel"><p class="muted">${subjPick !== 'all' ? `No ${SUBJECTS[subjPick]} work ${filter === 'todo' ? 'waiting' : 'marked yet'}.` : filter === 'todo' ? 'Nothing waiting. When Hadi sends work, it appears here.' : 'Nothing marked yet.'}</p></section>`}`));
       app.querySelectorAll('[data-filter]').forEach((b) => { b.onclick = () => { subjPick = 'all'; markingView(b.dataset.filter); }; });
       app.querySelectorAll('[data-subj]').forEach((b) => { b.onclick = () => { subjPick = b.dataset.subj; markingView(filter); }; });
       app.querySelectorAll('details[data-sheet]').forEach((d) => { d.addEventListener('toggle', async () => { if (d.open && !d.dataset.loaded) { d.dataset.loaded = 1; d.querySelector('.lesson').innerHTML = (await api.answerSheet(d.dataset.sheet)) || 'No answer sheet.'; } }); });

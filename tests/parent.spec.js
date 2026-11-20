@@ -73,3 +73,21 @@ async function signInHadiAndSend(page) {
   await expect(page.locator('.msg.ok')).toBeVisible();
   await page.click('#signout');
 }
+
+test('weak topics can be filtered by subject', async ({ page }) => {
+  await go(page, '#topics');
+  await expect(page.locator('.chip')).toContainText(['All', 'English', 'Maths']);
+  await page.click('[data-subj=maths]');
+  await expect(page.locator('[data-topic]')).toHaveCount(1);
+  await page.click('[data-subj=english]');
+  await expect(page.locator('[data-topic]')).toHaveCount(2);
+  await page.selectOption('[data-topic="2"]', 'Secure');
+  await expect(page.locator('#topic-msg')).toContainText('Saved');
+});
+
+test('marking shows every subject button, even with nothing to mark', async ({ page }) => {
+  await go(page, '#marking');
+  await expect(page.locator('.chip')).toContainText(['All', 'English', 'Maths']);
+  await page.click('[data-subj=maths]');
+  await expect(page.locator('.panel')).toContainText('No Maths work waiting');
+});
