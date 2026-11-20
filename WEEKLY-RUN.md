@@ -206,11 +206,14 @@ make a fresh version of that set with NEW questions, same level and length, unle
 ### Mark practice tries
 1. `get "practice_attempts?mark=is.null&order=created_at"`. Quiz-only sets (kind quiz) mark themselves: patch
    `mark`=`quiz_score`, `mark_max`=`quiz_max`, short feedback only if useful, `marked_at`.
-2. **Marking principle (Usman, 20 Nov 2026):** the parent's answers are a guide to what's right, not words to match.
-   Give full marks for any answer that is correct and makes the same points in the student's own words (like a real
+2. **Marking principle (Usman, 20 Nov 2026):** the parent's or teacher's answers are the BASELINE: they decide what is
+   right, which points earn marks and how many marks each part is worth. Never mark against your own answer instead.
+   They are not words to match: give full marks for any answer that makes the same points in the student's own words (like a real
    exam mark scheme: "or equivalent"). Accept correct alternative methods, equivalent values (84 kJ = 84 000 J,
    7 g/cm³ = 7 g cm⁻³) and correct extra detail. Only take marks off for a missing point, a wrong fact or value, or a
    missing unit where the mark scheme gives a mark for it. Give method marks for correct working even if the final answer is wrong.
+   If you think the baseline answer itself is wrong, still mark to the baseline, and tell the parent in the run summary
+   (and a "Check:" note on the answer sheet) so they can decide; don't change the student's mark on your own.
    2. Otherwise mark against the answer sheet like weekly work (photos: `download "<path>" <out> practice`). Several tries
    of the same set are separate attempts: mark each, and say what improved since the last try.
 3. `patch practice_attempts "id=eq.<id>" '{"mark":…,"mark_max":…,"feedback":"…","marked_at":"<now>"}'`. Feedback is
