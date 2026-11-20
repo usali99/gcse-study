@@ -72,3 +72,47 @@ test('students never see the question bank', async ({ page }) => {
   await go(page, '#bank-bp1');
   await expect(page.locator('body')).not.toContainText('displacement can');
 });
+
+test('add a paper straight to the bank: it waits for the evening run, then practice can be made from the Practice page', async ({ page }) => {
+  await signIn(page, 'usman');
+  await go(page, '#bank-add');
+  await page.fill('#ba-title', 'Physics Mock A');
+  await page.fill('#ba-q', '1. What is density? (2 marks)');
+  await page.click('#ba-go');
+  await expect(page.locator('#ba-msg')).toContainText('Add the answers');
+  await page.check('input[name=borigin][value=exam_board]');
+  await page.fill('#ba-a', '1. mass ÷ volume (2)');
+  await page.click('#ba-go');
+  await expect(page).toHaveURL(/#bank-bp\d+/);
+  await expect(page.locator('.panel h2').first()).toHaveText('Being added');
+  await go(page, '#bank');
+  await expect(page.locator('.pset-card', { hasText: 'Physics Mock A' })).toContainText('Being added');
+  // From the Practice page, choose a bank paper and go straight to choosing questions for this child.
+  await go(page, '#pnew-hadi');
+  await expect(page.locator('#p-bank-pick option').first()).toContainText('Physics Mock A');
+  await expect(page.locator('#p-bank-pick option').first()).toContainText('(being added)');
+  await page.selectOption('#p-bank-pick', 'bp1');
+  await page.click('#p-bank-go');
+  await expect(page).toHaveURL(/#bank-bp1/);
+  await expect(page.locator('#bform')).toBeVisible();
+  await noSideScroll(page);
+});
+
+test('make a mock (ready now) and a quiz (sent to the evening run) from the bank', async ({ page }) => {
+  await signIn(page, 'usman');
+  await go(page, '#bank-bp1');
+  await page.check('input[name=bkind][value=mock]');
+  await page.fill('#b-n', '2');
+  await page.fill('#b-min', '20');
+  await expect(page.locator('#b-go')).toHaveText('Make it now');
+  await page.click('#b-go');
+  await expect(page).toHaveURL(/#pset-/);
+  await expect(page.locator('.status-draft')).toBeVisible();
+  await expect(page.locator('.lesson').first()).toContainText('Mock exam');
+  await go(page, '#bank-bp1');
+  await page.check('input[name=bkind][value=quiz]');
+  await expect(page.locator('#b-go')).toHaveText('Send to Ninegrade');
+  await page.click('#b-go');
+  await expect(page).toHaveURL(/#pset-/);
+  await expect(page.locator('.status-requested')).toBeVisible();
+});

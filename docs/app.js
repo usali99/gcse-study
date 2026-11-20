@@ -230,8 +230,8 @@
     };
   });
   const study = window.createStudy({ awayDays: (sid) => api.awayDays(sid), who: (r) => (!me ? null : r === 'student' ? me.id : (childrenOf(me.id)[0] || {}).id), sb: api.sb, demo: api.demo, getMeId: () => me && me.id, shell: (...a) => shell(...a), page: (...a) => page(...a), esc, today, app, report });
-  const practice = window.createPractice({ sb: api.sb, demo: api.demo, esc, fmt, today, app, shell: (...a) => shell(...a), page: (...a) => page(...a), me: () => me, D: () => D, person: (id) => person(id), managedBy: (sid) => managedBy(sid), setByNote: (sid) => setByNote(sid) });
-  const bank = window.createBank({ sb: api.sb, demo: api.demo, esc, today, app, shell: (...a) => shell(...a), page: (...a) => page(...a), me: () => me, person: (id) => person(id), practice });
+  const practice = window.createPractice({ sb: api.sb, demo: api.demo, esc, fmt, today, app, shell: (...a) => shell(...a), page: (...a) => page(...a), me: () => me, D: () => D, person: (id) => person(id), managedBy: (sid) => managedBy(sid), setByNote: (sid) => setByNote(sid), bankPapers: () => bank.papers() });
+  const bank = window.createBank({ sb: api.sb, demo: api.demo, esc, today, app, shell: (...a) => shell(...a), page: (...a) => page(...a), me: () => me, D: () => D, person: (id) => person(id), practice });
 
   // Derived lookups over the loaded data.
   const person = (id) => D.people.find((p) => p.id === id) || { id, full_name: 'Someone', role: 'student' };

@@ -503,3 +503,4 @@ details.panel > summary { cursor: pointer; }
 .check-row { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
 .check-row input { width: 20px; height: 20px; margin-top: 2px; flex: none; }
 .btn.danger { border-color: var(--bad, #c0392b); color: var(--bad, #c0392b); }
+.or-head { font-size: 1.05rem; margin: 18px 0 8px; color: var(--ink-2); }

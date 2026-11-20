@@ -234,6 +234,24 @@ make a fresh version of that set with NEW questions, same level and length, unle
    `requested` and patch only `reply` saying what's needed (the parent sees it on the set's page); mention it in the summary.
    Never set status `assigned`: the parent assigns.
 
+### Add new question bank papers (both runs; needs v2-bank-upload.sql)
+Parents and teachers add papers straight to the bank ("Add a paper"). For every `bank_papers` row with `status=processing`:
+1. Read `q_text` / `q_files` (questions) and `a_text` / `a_files` (answers / mark scheme) and `note`. Files are in the
+   private "practice" bucket: `node tools/db.mjs download "<path>" /tmp/b/<name> practice`.
+2. Split the paper into questions exactly as written (same numbering, order, wording and marks; describe any diagram in
+   words; keep the paper's section headings in `section`). Give each a short `topic`. Insert `bank_questions` and one
+   `bank_answers` row per question with the parent's answer word for word (plain text). Where they gave no answer for a
+   question, write one and start it with "(added by Ninegrade)".
+3. Patch the paper: `status` = `ready`, `reply` = one line for the parent ("Saved 70 questions with your answers.").
+   If it can't be read or the answers are missing, set `status` = `failed` and `reply` saying exactly what's needed.
+4. Mention new papers in the run summary.
+
+### Bank quizzes and lessons (`practice_sets` requested with `bank_question_ids`)
+Use ONLY those bank questions (in order) and their `bank_answers` as the baseline. quiz: turn each into a self-marking
+item, keeping the wording (mc / num / short with `accept` for equivalent answers); a question that can't self-mark goes
+in `body_html` as a written question. lesson: short teaching on the topics, then the questions word for word under
+"Your turn". Write the answer sheet from the bank answers.
+
 ### Save uploaded papers to the question bank (needs v2-bank.sql; skip quietly if `bank_papers` doesn't exist)
 After making a set from a parent's or teacher's UPLOADED paper with `as_is=true` (not `based_on`), save the paper to
 their question bank once, so they never have to upload it again:

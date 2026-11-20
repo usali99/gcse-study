@@ -12,6 +12,9 @@
     library: ['In the Ninegrade library', 'Every parent and teacher on Ninegrade can use it.'],
   };
 
+  const ORIGIN = { own: 'Written by me', exam_board: 'Exam board past paper', publisher: 'Publisher, tutor or school', other: 'Somewhere else' };
+  const KIND = { practice: ['Practice questions', 'The questions as they are, marked with feedback. Ready now.'], mock: ['Mock exam', 'Timed, exam layout, marked with feedback. Ready now.'],
+    quiz: ['Quiz', 'Self-marking questions made from these. Ready after the evening run.'], lesson: ['Lesson', 'Teaches the topics, then these questions. Ready after the evening run.'] };
   window.createBank = function (ctx) {
     const { esc, shell, page, app } = ctx; const practice = ctx.practice;
     const me = () => ctx.me();
@@ -37,7 +40,14 @@
           must(await sb.from('bank_answers').upsert({ question_id: q.id, answer }, { onConflict: 'question_id' })); },
         async used(sid, pid) { return must(await sb.from('practice_sets').select('bank_question_ids').eq('student_id', sid).eq('bank_paper_id', pid)).flatMap((x) => x.bank_question_ids || []); },
         async results(sid) { return must(await sb.from('bank_results').select('question_id, mark, mark_max').eq('student_id', sid)); },
-        async makeSet(a) { return must(await sb.rpc('v2_bank_make_set', { sid: a.sid, pid: a.pid, qids: a.qids, set_title: a.title, set_minutes: a.minutes, set_due: a.due, set_replaces: a.replaces })); },
+        async makeSet(a) { return must(await sb.rpc('v2_bank_make_set', { sid: a.sid, pid: a.pid, qids: a.qids, set_title: a.title, set_minutes: a.minutes, set_due: a.due, set_replaces: a.replaces, set_kind: a.kind })); },
+        async addPaper(p, qFiles, aFiles) {
+          const up = async (tag, files) => { const out = []; const ts = Date.now();
+            for (let i = 0; i < files.length; i++) { const f = files[i]; const safe = f.name.toLowerCase().replace(/[^a-z0-9.]+/g, '-').slice(-60);
+              const path = `${me().id}/bank/${ts}/${tag}-${i + 1}-${safe}`; must(await sb.storage.from('practice').upload(path, f, { contentType: f.type || undefined })); out.push(path); }
+            return out; };
+          const q_files = await up('q', qFiles); const a_files = await up('a', aFiles);
+          return must(await sb.from('bank_papers').insert({ ...p, q_files, a_files }).select('id').single()).id; },
       };
     }
     function demoApi() {
@@ -95,6 +105,9 @@
         async shareCount(pid) { return S.shares.filter((s) => s.paper_id === pid).length; },
         async joined() { return S.shares.filter((s) => s.person_id === me().id).map((s) => s.paper_id); },
         async saveQuestion(q, answer) { const x = S.questions.find((y) => y.id === q.id); if (!x || !canEdit(P(x.paper_id))) throw new Error('Not allowed.'); Object.assign(x, { question: q.question, marks: q.marks, topic: q.topic, answer }); save(); },
+        async addPaper(x, qFiles, aFiles) { if (!isUser()) throw new Error('Only parents and teachers can use the question bank.');
+          const id = 'bp' + Date.now(); S.papers.unshift({ ...x, id, owner_id: me().id, sharing: 'private', share_code: null, permission_confirmed: false, status: 'processing', reply: '',
+            q_files: qFiles.map((f) => f.name), a_files: aFiles.map((f) => f.name), created_at: new Date().toISOString() }); save(); return id; },
         async used(sid) { return S.used[sid] || []; },
         async results(sid) { return S.results.filter((r) => r.student_id === sid); },
         async makeSet(a) { const p = P(a.pid); if (!p || !canRead(p)) throw new Error("You don't have this paper.");
@@ -107,7 +120,10 @@
           body = `<div class="header"><p><b>${esc(p.title)}</b> · ${qs.length} question${qs.length === 1 ? '' : 's'} · ${total} marks</p></div><p><i>Answer all questions. Show your working for calculations and include units.</i></p>${body}`;
           ans = `<p><b>For the parent only.</b> From the question bank: ${esc(p.title)}.</p>${ans}<p><b>Total: ${total} marks.</b></p>`;
           S.used[a.sid] = [...(S.used[a.sid] || []), ...qs.map((x) => x.id)]; save();
-          return practice.demoInsert({ student_id: a.sid, subject: p.subject, kind: 'practice', title: a.title || p.title, minutes: a.minutes, due_date: a.due, replaces_lessons: !!a.replaces, as_is: true, status: 'draft', body_html: body, bank_question_ids: qs.map((x) => x.id), bank_paper_id: p.id, reply: `Made straight away from the question bank: ${qs.length} questions, ${total} marks. Check it, then assign it.` }, ans); },
+          const k = a.kind || 'practice';
+          if (k === 'quiz' || k === 'lesson') return practice.demoInsert({ student_id: a.sid, subject: p.subject, kind: k, title: a.title || p.title, minutes: a.minutes, due_date: a.due, replaces_lessons: !!a.replaces, as_is: true, status: 'requested', body_html: '', bank_question_ids: qs.map((x) => x.id), bank_paper_id: p.id, note: `From the question bank: use ONLY these ${qs.length} questions.`, reply: '' }, '');
+          if (k === 'mock') body = body.replace('<p><i>Answer all questions.', `<div class="msg info"><p><b>Mock exam.</b> Work on your own, without notes.${a.minutes ? ` Time allowed: ${a.minutes} minutes.` : ''} Total: ${total} marks.</p></div><p><i>Answer all questions.`);
+          return practice.demoInsert({ student_id: a.sid, subject: p.subject, kind: k, title: a.title || p.title, minutes: a.minutes, due_date: a.due, replaces_lessons: !!a.replaces, as_is: true, status: 'draft', body_html: body, bank_question_ids: qs.map((x) => x.id), bank_paper_id: p.id, reply: `Made straight away from the question bank: ${qs.length} questions, ${total} marks. Check it, then assign it.` }, ans); },
       };
     }
 
@@ -115,7 +131,7 @@
     const count = (p) => ((p.bank_questions && p.bank_questions[0]) || {}).count || 0;
     const sharePill = (p) => `<span class="pill ${p.sharing === 'private' ? 'todo' : p.sharing === 'library_pending' ? 'draft' : 'done'}">${SHARING[p.sharing][0]}</span>`;
     const card = (p, extra = '') => `<a class="pset-card" href="#bank-${esc(p.id)}"><span class="stripe kind-practice"></span><span class="lc-body"><span class="subj">${esc(p.subject)}</span>
-      <span class="lc-title">${esc(p.title)}</span><span class="muted small">${count(p)} question${count(p) === 1 ? '' : 's'}${extra}</span></span>${p.owner_id === me().id ? sharePill(p) : ''}</a>`;
+      <span class="lc-title">${esc(p.title)}</span><span class="muted small">${p.status === 'processing' ? 'Being added: ready after the evening run' : p.status === 'failed' ? 'Couldn\'t be added, open it to see why' : `${count(p)} question${count(p) === 1 ? '' : 's'}`}${extra}</span></span>${p.status === 'processing' ? '<span class="pill draft">Being added</span>' : p.status === 'failed' ? '<span class="pill missed">Needs attention</span>' : p.owner_id === me().id ? sharePill(p) : ''}</a>`;
 
     async function listPage() {
       if (!isUser()) return shell('bank', page('<div class="narrow"><div class="page-head"><h1>Question bank</h1></div><section class="panel"><p class="muted">The question bank is for parents and teachers.</p></section></div>'));
@@ -127,9 +143,10 @@
       const pending = me().is_platform_admin ? papers.filter((p) => p.sharing === 'library_pending' && p.owner_id !== me().id) : [];
       const sec = (title, list, help, empty) => `<section class="panel"><h2>${title}${list.length ? ` <span class="count">${list.length}</span>` : ''}</h2>${help ? `<p class="muted small">${help}</p>` : ''}${list.length ? list.map((p) => card(p)).join('') : `<p class="muted">${empty}</p>`}</section>`;
       shell('bank', page(`<div class="narrow"><div class="page-head"><p class="kicker dark">Practice</p><h1>Question bank</h1>
-        <p class="muted">Papers you've uploaded are saved here question by question, with your answers. Make practice from them any time, as many or as few questions as you like, without uploading again. Students never see the bank or the answers.</p></div><div id="flash"></div>
+        <p class="muted">Add a paper once, with its answers. Ninegrade saves it question by question, word for word. Then make practice, a mock, a quiz or a lesson from it any time, as many or as few questions as you like. Students never see the bank or the answers.</p>
+        <div class="row"><a class="btn primary" href="#bank-add">Add a paper</a></div></div><div id="flash"></div>
         ${pending.length ? sec('Waiting for your approval', pending, 'Check each paper is original or shared with permission before approving it for the library.', '') : ''}
-        ${sec('My papers', mine, 'A paper is added here after the evening run makes a practice set from your upload with "Use my questions exactly as they are".', 'No papers yet. Upload a paper on the Practice page and choose "Use my questions exactly as they are". It appears here after the next evening run.')}
+        ${sec('My papers', mine, '', 'No papers yet. Press "Add a paper" to upload or paste one with its answers.')}
         ${sec('Shared with me', shared, '', 'Nothing shared with you yet. If someone gives you a share code, enter it below.')}
         <section class="panel"><h2>Add a shared paper</h2><form id="bjoin" class="row form-row"><label for="bj-code" class="grow">Share code<input id="bj-code" maxlength="12" autocomplete="off" placeholder="e.g. 7F3A9C21" required></label><button class="btn primary">Add</button></form><div id="bj-msg"></div></section>
         ${sec('Ninegrade library', library, 'Papers shared with every parent and teacher, checked by Ninegrade.', 'Nothing in the library yet.')}</div>`));
@@ -138,12 +155,48 @@
         catch (x) { b.disabled = false; document.getElementById('bj-msg').innerHTML = `<p class="msg err">${esc(nice(x))}</p>`; } };
     }
 
-    let pick = { mode: 'next', sid: null };
+    function addPage() {
+      if (!isUser()) return listPage();
+      const subs = [...new Set((ctx.D().courses || []).map((c) => c.subject))];
+      shell('bank', page(`<div class="narrow"><div class="page-head"><a class="small" href="#bank">← Question bank</a><p class="kicker dark">Question bank</p><h1>Add a paper</h1>
+        <p class="muted">Upload or paste the questions and their answers once. Ninegrade saves every question word for word at the next evening run (weekdays, about 5:40 PM), with your answers as the mark scheme.</p></div>
+        <form id="baform" class="form panel">
+          <div class="row form-row"><label for="ba-title" class="grow">Title<input id="ba-title" maxlength="120" required placeholder="e.g. Physics Mock A"></label>
+            <label for="ba-subj" class="grow">Subject<input id="ba-subj" maxlength="60" required list="ba-subjs" value="${esc(subs[0] || '')}"><datalist id="ba-subjs">${subs.map((x) => `<option value="${esc(x)}">`).join('')}</datalist></label></div>
+          <fieldset class="kind-pick"><legend>Where is it from? <small>This decides whether it can be shared later.</small></legend>${Object.entries(ORIGIN).map(([k, t], i) => `<label class="kind-opt"><input type="radio" name="borigin" value="${k}" ${i === 0 ? 'checked' : ''}> <b>${t}</b><span>${k === 'own' ? 'You can share it with others.' : 'Fine for your own children. Only share it if you have permission.'}</span></label>`).join('')}</fieldset>
+          <h2>Questions</h2>
+          <label for="ba-q">Paste the questions <small>optional if you upload them</small><textarea id="ba-q" rows="6" maxlength="50000" placeholder="1a. Describe the arrangement of particles in a solid. (2 marks)"></textarea></label>
+          <label for="ba-qf">Or upload them <small>photos or PDF, up to 20 files of 15 MB each</small><input id="ba-qf" type="file" multiple accept="image/*,application/pdf,.doc,.docx,.txt"></label>
+          <h2>Answers or mark scheme</h2>
+          <label for="ba-a">Paste the answers <small>optional if you upload them</small><textarea id="ba-a" rows="5" maxlength="50000" placeholder="1a. Close together, regular pattern, vibrate in place. (2)"></textarea></label>
+          <label for="ba-af">Or upload them <small>students never see these</small><input id="ba-af" type="file" multiple accept="image/*,application/pdf,.doc,.docx,.txt"></label>
+          <label for="ba-note">Anything Ninegrade should know? <small>optional</small><textarea id="ba-note" rows="2" maxlength="500" placeholder="e.g. Questions 5 to 8 are on page 3. Skip question 12."></textarea></label>
+          <div id="ba-msg"></div><button class="btn primary lg" id="ba-go">Add to my bank</button></form></div>`));
+      document.getElementById('baform').onsubmit = async (e) => { e.preventDefault(); const msg = document.getElementById('ba-msg'); const b = document.getElementById('ba-go');
+        const v = (x) => document.getElementById(x).value.trim(); const qf = [...document.getElementById('ba-qf').files]; const af = [...document.getElementById('ba-af').files];
+        if (!v('ba-q') && !qf.length) { msg.innerHTML = '<p class="msg err">Paste the questions or upload them.</p>'; return; }
+        if (!v('ba-a') && !af.length) { msg.innerHTML = '<p class="msg err">Add the answers too, so Ninegrade can mark against them. Paste them or upload them.</p>'; return; }
+        if (qf.length > 20 || af.length > 20 || [...qf, ...af].some((f) => f.size > 15 * 1024 * 1024)) { msg.innerHTML = '<p class="msg err">Up to 20 files of 15 MB each for questions, and the same for answers.</p>'; return; }
+        b.disabled = true; b.textContent = qf.length || af.length ? 'Uploading…' : 'Adding…';
+        try { const id = await api.addPaper({ title: v('ba-title'), subject: v('ba-subj'), origin: (document.querySelector('input[name=borigin]:checked') || {}).value || 'own', q_text: v('ba-q'), a_text: v('ba-a'), note: v('ba-note') }, qf, af);
+          location.hash = '#bank-' + id; }
+        catch (x) { b.disabled = false; b.textContent = 'Add to my bank'; msg.innerHTML = `<p class="msg err">${esc(nice(x))}</p>`; } };
+    }
+
+    let pick = { mode: 'next', sid: null, kind: 'practice' };
     async function paperPage(id) {
       let p; let qs;
       try { [p, qs] = await Promise.all([api.paper(id), api.questions(id)]); } catch (x) { return shell('bank', page(`<div class="narrow"><section class="panel"><p class="msg err">${esc(nice(x))}</p></section></div>`)); }
       if (!p) return shell('bank', page('<div class="narrow"><div class="page-head"><a class="small" href="#bank">← Question bank</a><h1>Not found</h1></div><section class="panel"><p class="muted">This paper doesn\'t exist, or it isn\'t shared with you.</p></section></div>'));
       const owner = p.owner_id === me().id || me().is_platform_admin; const mineP = p.owner_id === me().id;
+      if (window.ngBankFor) { pick.sid = window.ngBankFor; window.ngBankFor = null; }
+      if (p.status === 'processing' || p.status === 'failed') {
+        return shell('bank', page(`<div class="narrow"><div class="page-head"><a class="small" href="#bank">← Question bank</a><p class="kicker dark">${esc(p.subject)}</p><h1>${esc(p.title)}</h1></div>
+          <section class="panel"><h2>${p.status === 'processing' ? 'Being added' : 'This paper couldn\'t be added yet'}</h2>
+          ${p.status === 'processing' ? '<p>Ninegrade saves each question and its answer at the next evening run (weekdays, about 5:40 PM). Then you can make practice from it.</p>' : `<p class="msg info">${esc(p.reply || 'Something was missing.')}</p>`}
+          <p class="small muted">${esc(ORIGIN[p.origin] || '')}${(p.q_files || []).length ? ` · ${p.q_files.length} question file${p.q_files.length === 1 ? '' : 's'}` : ''}${(p.a_files || []).length ? ` · ${p.a_files.length} answer file${p.a_files.length === 1 ? '' : 's'}` : ''}</p>
+          ${mineP ? '<div class="row"><button class="btn ghost sm" id="bdel">Delete this paper</button></div><div id="bs-msg"></div>' : ''}</section></div>`)), wireDelete(p);
+      }
       const kids = practice.myStudents(); if (!pick.sid || !kids.some((k) => k.id === pick.sid)) pick.sid = kids[0] ? kids[0].id : null;
       const [used, res] = pick.sid ? await Promise.all([api.used(pick.sid, id).catch(() => []), api.results(pick.sid).catch(() => [])]) : [[], []];
       const R = Object.fromEntries(res.map((r) => [r.question_id, r])); const U = new Set(used);
@@ -152,10 +205,11 @@
       const ansOf = (q) => (q.bank_answers && (Array.isArray(q.bank_answers) ? (q.bank_answers[0] || {}).answer : q.bank_answers.answer)) || '';
       const kidName = pick.sid ? esc(first(ctx.person(pick.sid))) : '';
       shell('bank', page(`<div class="narrow"><div class="page-head"><a class="small" href="#bank">← Question bank</a><p class="kicker dark">${esc(p.subject)}</p><h1>${esc(p.title)}</h1>
-        <p class="muted">${qs.length} questions · ${total} marks${mineP ? '' : p.sharing === 'library' ? ' · from the Ninegrade library' : ' · shared with you'}</p></div><div id="flash"></div>
+        <p class="muted">${qs.length} questions · ${total} marks${p.origin ? ` · ${esc(ORIGIN[p.origin] || '')}` : ''}${mineP ? '' : p.sharing === 'library' ? ' · from the Ninegrade library' : ' · shared with you'}</p></div><div id="flash"></div>
         ${kids.length && qs.length ? `<section class="panel" id="bmake"><h2>Make practice now</h2>
           <form id="bform" class="form">
             ${kids.length > 1 ? `<label for="b-kid">For<select id="b-kid">${kids.map((k) => `<option value="${esc(k.id)}" ${k.id === pick.sid ? 'selected' : ''}>${esc(k.full_name)}</option>`).join('')}</select></label>` : ''}
+            <fieldset class="kind-pick"><legend>What to make</legend>${Object.entries(KIND).map(([k, [t, d]]) => `<label class="kind-opt"><input type="radio" name="bkind" value="${k}" ${pick.kind === k ? 'checked' : ''}> <b>${t}</b><span>${d}</span></label>`).join('')}</fieldset>
             <fieldset class="kind-pick"><legend>Which questions?</legend>
               ${[['next', 'Next ones not done yet', `Carries on from where ${kidName} got to.`], ['wrong', 'Ones got wrong before', 'Questions that lost marks last time.'], ['topic', 'One topic', 'Only questions on the topic you choose.'], ['random', 'A random mix', 'Any questions from the paper.'], ['pick', 'Pick by hand', 'Tick the questions in the list below.']]
                 .filter(([k]) => k !== 'topic' || topics.length).map(([k, t, d]) => `<label class="kind-opt"><input type="radio" name="bmode" value="${k}" ${pick.mode === k ? 'checked' : ''}> <b>${t}</b><span>${d}</span></label>`).join('')}</fieldset>
@@ -168,8 +222,8 @@
               <label class="kind-opt"><input type="radio" name="bfit" value="extra" checked> <b>On top of this week's lessons</b><span>Extra practice.</span></label>
               <label class="kind-opt"><input type="radio" name="bfit" value="instead"> <b>Instead of some of this week's lessons</b><span>The next weekly plan is shorter in this subject.</span></label></fieldset>
             <p class="small" id="b-preview" aria-live="polite"></p><div id="b-msg"></div>
-            <button class="btn primary lg" id="b-go">Make it now</button>
-            <p class="muted small">It's ready straight away to check and assign. Ninegrade marks ${kidName}'s answers against this paper's answers.</p></form></section>` : kids.length ? '' : '<section class="panel"><p class="muted">Link a child or a class first to make practice from the bank.</p></section>'}
+            <button class="btn primary lg" id="b-go">${pick.kind === 'quiz' || pick.kind === 'lesson' ? 'Send to Ninegrade' : 'Make it now'}</button>
+            <p class="muted small" id="b-when">${pick.kind === 'quiz' || pick.kind === 'lesson' ? 'Ready to check after the next evening run.' : "It's ready straight away to check and assign."} Ninegrade marks ${kidName}'s answers against this paper's answers.</p></form></section>` : kids.length ? '' : '<section class="panel"><p class="muted">Link a child or a class first to make practice from the bank.</p></section>'}
         <section class="panel"><div class="panel-head"><h2>Questions</h2>${kidName ? `<span class="muted small">Status for ${kidName}</span>` : ''}</div>
           <ol class="bank-list">${qs.map((q) => `<li class="bank-q" data-q="${esc(q.id)}"><label class="bq-pick" ${pick.mode === 'pick' ? '' : 'hidden'}><input type="checkbox" value="${esc(q.id)}" aria-label="Use question ${esc(q.num)}"></label>
             <div class="bq-body"><div class="bq-top"><b>${esc(q.num)}</b>${q.topic ? `<span class="tag">${esc(q.topic)}</span>` : ''}<span class="muted small">${q.marks} mark${q.marks === 1 ? '' : 's'}</span>${kidName ? stat(q) : ''}</div>
@@ -193,6 +247,9 @@
           return { list: form.dataset.rand.split(',').map((x) => qs.find((q) => q.id === x)).filter(Boolean) };
         };
         const preview = () => { const m = mode(); pick.mode = m;
+          pick.kind = (form.querySelector('input[name=bkind]:checked') || {}).value || 'practice'; const later = pick.kind === 'quiz' || pick.kind === 'lesson';
+          const go = document.getElementById('b-go'); if (!go.disabled) go.textContent = later ? 'Send to Ninegrade' : 'Make it now';
+          document.getElementById('b-when').textContent = `${later ? 'Ready to check after the next evening run.' : "It's ready straight away to check and assign."} Ninegrade marks ${kidName ? first(ctx.person(pick.sid)) + "'s" : 'the'} answers against this paper's answers.`;
           app.querySelectorAll('.bq-pick').forEach((l) => { l.hidden = m !== 'pick'; });
           const tw = document.getElementById('b-topic-wrap'); if (tw) tw.hidden = m !== 'topic';
           document.getElementById('b-n').disabled = m === 'pick';
@@ -207,9 +264,9 @@
           const b = document.getElementById('b-go'); b.disabled = true; b.textContent = 'Making…';
           const nums = c.list.map((q) => q.num); const title = document.getElementById('b-title').value.trim() || `${p.title} · ${nums.length > 1 ? `${nums[0]} to ${nums[nums.length - 1]}` : nums[0]}`;
           try { const sid = await api.makeSet({ sid: pick.sid, pid: id, qids: c.list.map((q) => q.id), title: title.slice(0, 120), minutes: Number(document.getElementById('b-min').value) || null,
-              due: document.getElementById('b-due').value || null, replaces: (form.querySelector('input[name=bfit]:checked') || {}).value === 'instead' });
+              due: document.getElementById('b-due').value || null, replaces: (form.querySelector('input[name=bfit]:checked') || {}).value === 'instead', kind: pick.kind });
             delete form.dataset.rand; location.hash = '#pset-' + sid; }
-          catch (x) { b.disabled = false; b.textContent = 'Make it now'; msg.innerHTML = `<p class="msg err">${esc(nice(x))}</p>`; } };
+          catch (x) { b.disabled = false; b.textContent = pick.kind === 'quiz' || pick.kind === 'lesson' ? 'Send to Ninegrade' : 'Make it now'; msg.innerHTML = `<p class="msg err">${esc(nice(x))}</p>`; } };
       }
 
       // ----- edit a question (the person who added the paper) -----
@@ -237,6 +294,7 @@
         ${p.share_code && p.sharing === 'shared' ? `<div class="share-code"><span class="muted small">Share code</span><b id="bcode">${esc(p.share_code)}</b><span class="muted small">Give this code to a parent or teacher. They enter it on their Question bank page. ${n ? `${n} ${n === 1 ? 'person has' : 'people have'} added it.` : 'Nobody has added it yet.'}</span></div>` : ''}
         ${admin && pend ? '<div class="row"><button class="btn primary sm" data-bshare="library">Approve for the library</button><button class="btn ghost sm" data-bshare="private">Turn down</button></div>' : ''}
         ${p.owner_id === me().id ? `<form id="bsform" class="form">
+          ${p.origin && p.origin !== 'own' ? `<p class="msg info small">This paper is from: ${esc(ORIGIN[p.origin])}. Only share it if you have permission from whoever owns it.</p>` : ''}
           <label class="check-row"><input type="checkbox" id="bs-perm" ${p.permission_confirmed ? 'checked' : ''}> <span>I wrote this paper, or I have permission to share it. <span class="muted small">Papers from exam boards, publishers, tutors or schools usually can't be shared without permission.</span></span></label>
           <div class="row">${p.sharing === 'private' ? '<button type="button" class="btn primary sm" data-bshare="shared">Share by code</button>' : ''}${['private', 'shared'].includes(p.sharing) && !admin ? '<button type="button" class="btn ghost sm" data-bshare="library_pending">Offer to the Ninegrade library</button>' : ''}${admin && p.sharing !== 'library' ? '<button type="button" class="btn ghost sm" data-bshare="library">Put in the library</button>' : ''}${p.sharing !== 'private' ? '<button type="button" class="btn ghost sm" data-bshare="private">Stop sharing</button>' : ''}</div>
           <p class="muted small">Sharing never shows your child's work or marks. People you share with can make practice from it, but can't change it. If you stop sharing, they keep the sets they've made but can't make new ones.</p>
@@ -248,6 +306,9 @@
         b.disabled = true;
         try { await api.updatePaper(p.id, { sharing: to, ...(perm ? { permission_confirmed: perm.checked } : {}) }); paperPage(p.id); }
         catch (x) { b.disabled = false; (m || box).insertAdjacentHTML('beforeend', `<p class="msg err">${esc(nice(x))}</p>`); } }; });
+      wireDelete(p);
+    }
+    function wireDelete(p) {
       const del = document.getElementById('bdel');
       if (del) del.onclick = async () => { if (!del.dataset.sure) { del.dataset.sure = 1; del.textContent = 'Press again to delete it for everyone'; del.classList.add('danger'); return; }
         del.disabled = true; try { await api.removePaper(p.id); location.hash = '#bank'; } catch (x) { del.disabled = false; document.getElementById('bs-msg').innerHTML = `<p class="msg err">${esc(nice(x))}</p>`; } };
@@ -257,9 +318,10 @@
     async function route(r) {
       if (!me() || !me().role) return false;
       if (r === 'bank') { await listPage(); return true; }
+      if (r === 'bank-add') { addPage(); return true; }
       if (r.startsWith('bank-')) { await paperPage(r.slice(5)); return true; }
       return false;
     }
-    return { nav, route, reset: () => api.reset && api.reset() };
+    return { nav, route, reset: () => api.reset && api.reset(), papers: async () => { try { return isUser() ? await api.papers() : []; } catch (e) { return []; } } };
   };
 })();
