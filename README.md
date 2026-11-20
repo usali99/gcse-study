@@ -65,3 +65,18 @@ with its own tables, so the site above is unaffected.
 Users can change only their own name; roles and owner status can't be changed from the website.
 `supabase/v2-check-access.sql` (read-only) shows what each account can see and confirms that escalation is refused.
 Run it after any change to the access rules.
+
+## Tests
+
+Automated browser tests (Playwright) live in `tests/`. They open the site in **preview mode** (`?preview`), which uses made-up demo accounts and lessons stored in the browser, so they never touch the real database.
+
+```
+npm install
+npx playwright install chromium   # first time only
+npm test                          # all tests, desktop and phone sizes
+npm run test:phone                # phone size only
+```
+
+GitHub runs them on every push to `main` (Actions tab, "Website tests"). If a test fails, the run turns red and a report with screenshots is attached to it.
+
+When you change a feature, update or add a test in the matching file: `student.spec.js`, `parent.spec.js`, `accounts.spec.js` or `landing.spec.js`.

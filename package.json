@@ -1,0 +1,13 @@
+{
+  "name": "ninegrade-site",
+  "private": true,
+  "description": "Ninegrade GCSE Plan website (static, served from docs/). Tests run the site in preview mode with demo data only.",
+  "scripts": {
+    "test": "playwright test",
+    "test:phone": "playwright test --project=phone",
+    "test:report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

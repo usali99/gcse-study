@@ -1,3 +1,5 @@
 node_modules/
 preview/
 *.local.*
+test-results/
+playwright-report/
