@@ -117,3 +117,15 @@ test('make a mock (ready now) and a quiz (sent to the evening run) from the bank
   await expect(page).toHaveURL(/#pset-/);
   await expect(page.locator('.status-requested')).toBeVisible();
 });
+
+test('papers are tagged Original, and "Similar new questions" goes to the evening run', async ({ page }) => {
+  await signIn(page, 'usman');
+  await go(page, '#bank');
+  await expect(page.locator('.panel', { hasText: 'My papers' })).toContainText('Original');
+  await go(page, '#bank-bp1');
+  await expect(page.locator('.page-head')).toContainText('Original');
+  await page.check('input[name=bkind][value=similar]');
+  await expect(page.locator('#b-go')).toHaveText('Send to Ninegrade');
+  await page.click('#b-go');
+  await expect(page).toHaveURL(/#pset-/);
+});

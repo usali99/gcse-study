@@ -17,7 +17,9 @@
   const REVIEW = { offered: ['Offered to Ninegrade', 'draft'], changes: ['Changes asked', 'missed'], declined: ['Turned down', 'todo'], pending: ['Waiting for the owner', 'draft'] };
   const ORIGIN = { own: 'Written by me', exam_board: 'Exam board past paper', publisher: 'Publisher, tutor or school', other: 'Somewhere else' };
   const KIND = { practice: ['Practice questions', 'The questions as they are, marked with feedback. Ready now.'], mock: ['Mock exam', 'Timed, exam layout, marked with feedback. Ready now.'],
-    quiz: ['Quiz', 'Self-marking questions made from these. Ready after the evening run.'], lesson: ['Lesson', 'Teaches the topics, then these questions. Ready after the evening run.'] };
+    quiz: ['Quiz', 'Self-marking questions made from these. Ready after the evening run.'], lesson: ['Lesson', 'Teaches the topics, then these questions. Ready after the evening run.'],
+    similar: ['Similar new questions', 'Ninegrade writes new questions like these, with answers. They are kept in the Ninegrade bank, tagged "similar". Ready after the evening run.'] };
+  const LATER = ['quiz', 'lesson', 'similar'];
   window.createBank = function (ctx) {
     const { esc, shell, page, app } = ctx; const practice = ctx.practice;
     const me = () => ctx.me();
@@ -153,6 +155,7 @@
           ans = `<p><b>For the parent only.</b> From the question bank: ${esc(p.title)}.</p>${ans}<p><b>Total: ${total} marks.</b></p>`;
           S.used[a.sid] = [...(S.used[a.sid] || []), ...qs.map((x) => x.id)]; save();
           const k = a.kind || 'practice';
+          if (k === 'similar') return practice.demoInsert({ student_id: a.sid, subject: p.subject, kind: 'practice', title: a.title || p.title, minutes: a.minutes, due_date: a.due, replaces_lessons: !!a.replaces, as_is: false, status: 'requested', body_html: '', bank_question_ids: qs.map((x) => x.id), bank_paper_id: p.id, note: `From the question bank: write ${qs.length} SIMILAR NEW questions based on these.`, reply: '' }, '');
           if (k === 'quiz' || k === 'lesson') return practice.demoInsert({ student_id: a.sid, subject: p.subject, kind: k, title: a.title || p.title, minutes: a.minutes, due_date: a.due, replaces_lessons: !!a.replaces, as_is: true, status: 'requested', body_html: '', bank_question_ids: qs.map((x) => x.id), bank_paper_id: p.id, note: `From the question bank: use ONLY these ${qs.length} questions.`, reply: '' }, '');
           if (k === 'mock') body = body.replace('<p><i>Answer all questions.', `<div class="msg info"><p><b>Mock exam.</b> Work on your own, without notes.${a.minutes ? ` Time allowed: ${a.minutes} minutes.` : ''} Total: ${total} marks.</p></div><p><i>Answer all questions.`);
           return practice.demoInsert({ student_id: a.sid, subject: p.subject, kind: k, title: a.title || p.title, minutes: a.minutes, due_date: a.due, replaces_lessons: !!a.replaces, as_is: true, status: 'draft', body_html: body, bank_question_ids: qs.map((x) => x.id), bank_paper_id: p.id, reply: `Made straight away from the question bank: ${qs.length} questions, ${total} marks. Check it, then assign it.` }, ans); },
@@ -167,7 +170,7 @@
     async function loadNames(list) { const ids = [...new Set(list.flatMap((p) => [p.owner_id, p.contributed_by, p.added_by]).filter((x) => x && !names[x]))];
       if (ids.length) (await api.names(ids).catch(() => [])).forEach((x) => { names[x.id] = x.full_name; }); }
     const nm = (id) => esc(names[id] || ((ctx.D().people || []).find((x) => x.id === id) || {}).full_name || 'a parent');
-    const card = (p, extra = '') => `<a class="pset-card" href="#bank-${esc(p.id)}"><span class="stripe kind-practice"></span><span class="lc-body"><span class="subj">${trackTag(p)}${esc(p.subject)}</span>
+    const card = (p, extra = '') => `<a class="pset-card" href="#bank-${esc(p.id)}"><span class="stripe kind-practice"></span><span class="lc-body"><span class="subj">${trackTag(p)}${esc(p.subject)} · ${p.kind === 'similar' ? 'Similar' : 'Original'}</span>
       <span class="lc-title">${esc(p.title)}</span><span class="muted small">${p.status === 'processing' ? 'Being added: ready after the evening run' : p.status === 'failed' ? 'Couldn\'t be added, open it to see why' : `${count(p)} question${count(p) === 1 ? '' : 's'}`}${extra}</span></span>${p.status === 'processing' ? '<span class="pill draft">Being added</span>' : p.status === 'failed' ? '<span class="pill missed">Needs attention</span>' : mine(p) || (isNg(p) && staff() && p.review) ? sharePill(p) : ''}</a>`;
 
     async function listPage() {
@@ -237,6 +240,9 @@
       try { [p, qs] = await Promise.all([api.paper(id), api.questions(id)]); } catch (x) { return shell('bank', page(`<div class="narrow"><section class="panel"><p class="msg err">${esc(nice(x))}</p></section></div>`)); }
       if (!p) return shell('bank', page('<div class="narrow"><div class="page-head"><a class="small" href="#bank">← Question bank</a><h1>Not found</h1></div><section class="panel"><p class="muted">This paper doesn\'t exist, or it isn\'t shared with you.</p></section></div>'));
       const owner = canEditP(p); const mineP = mine(p); await loadNames([p]);
+      const allP = await api.papers().catch(() => []); const src = p.source_paper_id ? allP.find((x) => x.id === p.source_paper_id) : null; const sims = allP.filter((x) => x.source_paper_id === p.id);
+      const kindLine = p.kind === 'similar' ? `<p class="small"><span class="tagx">Similar</span> New questions written by Ninegrade${src ? `, based on <a href="#bank-${esc(src.id)}">${esc(src.title)}</a>` : ''}.</p>`
+        : `<p class="small"><span class="tagx">Original</span> The questions as they were added.${sims.length ? ` Similar sets made from it: ${sims.map((x) => `<a href="#bank-${esc(x.id)}">${esc(x.title)}</a>`).join(', ')}.` : ''}</p>`;
       if (window.ngBankFor) { pick.sid = window.ngBankFor; window.ngBankFor = null; }
       if (p.status === 'processing' || p.status === 'failed') {
         return shell('bank', page(`<div class="narrow"><div class="page-head"><a class="small" href="#bank">← Question bank</a><p class="kicker dark">${esc(p.subject)}</p><h1>${esc(p.title)}</h1></div>
@@ -253,7 +259,7 @@
       const ansOf = (q) => (q.bank_answers && (Array.isArray(q.bank_answers) ? (q.bank_answers[0] || {}).answer : q.bank_answers.answer)) || '';
       const kidName = pick.sid ? esc(first(ctx.person(pick.sid))) : '';
       shell('bank', page(`<div class="narrow"><div class="page-head"><a class="small" href="#bank">← Question bank</a><p class="kicker dark">${esc(p.subject)}</p><h1>${esc(p.title)}</h1>
-        <p class="muted">${qs.length} questions · ${total} marks${p.origin ? ` · ${esc(ORIGIN[p.origin] || '')}` : ''}${mineP ? '' : isNg(p) ? ` · Ninegrade ${TR[p.track || 'gcse']} bank${p.contributed_by ? ` · contributed by ${nm(p.contributed_by)}` : ''}` : ' · shared with you'}</p></div><div id="flash"></div>
+        <p class="muted">${qs.length} questions · ${total} marks${p.kind === 'similar' ? '' : p.origin ? ` · ${esc(ORIGIN[p.origin] || '')}` : ''}${mineP ? '' : isNg(p) ? ` · Ninegrade ${TR[p.track || 'gcse']} bank${p.contributed_by ? ` · contributed by ${nm(p.contributed_by)}` : ''}` : ' · shared with you'}</p>${kindLine}</div><div id="flash"></div>
         ${reviewBox(p)}
         ${kids.length && qs.length ? `<section class="panel" id="bmake"><h2>Make practice now</h2>
           <form id="bform" class="form">
@@ -271,8 +277,8 @@
               <label class="kind-opt"><input type="radio" name="bfit" value="extra" checked> <b>On top of this week's lessons</b><span>Extra practice.</span></label>
               <label class="kind-opt"><input type="radio" name="bfit" value="instead"> <b>Instead of some of this week's lessons</b><span>The next weekly plan is shorter in this subject.</span></label></fieldset>
             <p class="small" id="b-preview" aria-live="polite"></p><div id="b-msg"></div>
-            <button class="btn primary lg" id="b-go">${pick.kind === 'quiz' || pick.kind === 'lesson' ? 'Send to Ninegrade' : 'Make it now'}</button>
-            <p class="muted small" id="b-when">${pick.kind === 'quiz' || pick.kind === 'lesson' ? 'Ready to check after the next evening run.' : "It's ready straight away to check and assign."} Ninegrade marks ${kidName}'s answers against this paper's answers.</p></form></section>` : kids.length ? '' : '<section class="panel"><p class="muted">Link a child or a class first to make practice from the bank.</p></section>'}
+            <button class="btn primary lg" id="b-go">${LATER.includes(pick.kind) ? 'Send to Ninegrade' : 'Make it now'}</button>
+            <p class="muted small" id="b-when">${LATER.includes(pick.kind) ? 'Ready to check after the next evening run.' : "It's ready straight away to check and assign."} Ninegrade marks ${kidName}'s answers against this paper's answers.</p></form></section>` : kids.length ? '' : '<section class="panel"><p class="muted">Link a child or a class first to make practice from the bank.</p></section>'}
         <section class="panel"><div class="panel-head"><h2>Questions</h2>${kidName ? `<span class="muted small">Status for ${kidName}</span>` : ''}</div>
           <ol class="bank-list">${qs.map((q) => `<li class="bank-q" data-q="${esc(q.id)}"><label class="bq-pick" ${pick.mode === 'pick' ? '' : 'hidden'}><input type="checkbox" value="${esc(q.id)}" aria-label="Use question ${esc(q.num)}"></label>
             <div class="bq-body"><div class="bq-top"><b>${esc(q.num)}</b>${q.topic ? `<span class="tag">${esc(q.topic)}</span>` : ''}<span class="muted small">${q.marks} mark${q.marks === 1 ? '' : 's'}</span>${kidName ? stat(q) : ''}</div>
@@ -297,7 +303,7 @@
           return { list: form.dataset.rand.split(',').map((x) => qs.find((q) => q.id === x)).filter(Boolean) };
         };
         const preview = () => { const m = mode(); pick.mode = m;
-          pick.kind = (form.querySelector('input[name=bkind]:checked') || {}).value || 'practice'; const later = pick.kind === 'quiz' || pick.kind === 'lesson';
+          pick.kind = (form.querySelector('input[name=bkind]:checked') || {}).value || 'practice'; const later = LATER.includes(pick.kind);
           const go = document.getElementById('b-go'); if (!go.disabled) go.textContent = later ? 'Send to Ninegrade' : 'Make it now';
           document.getElementById('b-when').textContent = `${later ? 'Ready to check after the next evening run.' : "It's ready straight away to check and assign."} Ninegrade marks ${kidName ? first(ctx.person(pick.sid)) + "'s" : 'the'} answers against this paper's answers.`;
           app.querySelectorAll('.bq-pick').forEach((l) => { l.hidden = m !== 'pick'; });
@@ -316,7 +322,7 @@
           try { const sid = await api.makeSet({ sid: pick.sid, pid: id, qids: c.list.map((q) => q.id), title: title.slice(0, 120), minutes: Number(document.getElementById('b-min').value) || null,
               due: document.getElementById('b-due').value || null, replaces: (form.querySelector('input[name=bfit]:checked') || {}).value === 'instead', kind: pick.kind });
             delete form.dataset.rand; location.hash = '#pset-' + sid; }
-          catch (x) { b.disabled = false; b.textContent = pick.kind === 'quiz' || pick.kind === 'lesson' ? 'Send to Ninegrade' : 'Make it now'; msg.innerHTML = `<p class="msg err">${esc(nice(x))}</p>`; } };
+          catch (x) { b.disabled = false; b.textContent = LATER.includes(pick.kind) ? 'Send to Ninegrade' : 'Make it now'; msg.innerHTML = `<p class="msg err">${esc(nice(x))}</p>`; } };
       }
 
       // ----- edit a question (the person who added the paper) -----

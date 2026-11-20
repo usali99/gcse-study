@@ -259,6 +259,18 @@ Parents and teachers add papers straight to the bank ("Add a paper"). For every 
 - An 11+ child's lessons, practice and marking follow the 11+ test in their course (`board` = Kent Test, GL, CSSE,
   ISEB), Year 5 to 6 level, 20 to 30 minute sessions.
 
+### Original and similar questions (v2-bank-similar.sql; Usman, 20 Nov 2026)
+Every paper added to the bank is `kind=original` (the questions as uploaded). Whenever a run writes SIMILAR NEW questions
+(a practice set with `as_is=false`, a "Make another like this" set, or a bank set whose note says "SIMILAR NEW questions"):
+1. Write them as usual (new wording and numbers, same topics, style, difficulty and marks; never near-copies), with answers.
+2. Save them as a new bank paper with the service role: `kind=similar`, `source_paper_id` = the bank paper they came from
+   (the set's `bank_paper_id`, or the paper saved from that upload), `collection=ninegrade`, `owner_id` null,
+   `added_by` = the set's `created_by`, `track` = the child's track, `origin=own`, `review=''`, `status=ready`,
+   `sharing=private`, `subject` as the source, `title` = "<source title> · similar set N" (N = 1, 2, 3 per source).
+3. Insert its `bank_questions` (plain text) and `bank_answers`, then patch the practice set's `bank_paper_id` and
+   `bank_question_ids` to the NEW paper and its questions, so marks land on the similar questions.
+4. Say in the set's `reply`: "The new questions are also saved in the Ninegrade bank as similar set N."
+
 ### Bank quizzes and lessons (`practice_sets` requested with `bank_question_ids`)
 Use ONLY those bank questions (in order) and their `bank_answers` as the baseline. quiz: turn each into a self-marking
 item, keeping the wording (mc / num / short with `accept` for equivalent answers); a question that can't self-mark goes
