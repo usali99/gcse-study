@@ -164,7 +164,7 @@
         <form id="pform" class="form panel">
           <fieldset class="kind-pick"><legend>What would you like? <small>Tick one or more. Each one becomes its own set from the same material.</small></legend>${Object.entries(KINDS).map(([k, [t, d]]) => `<label class="kind-opt"><input type="checkbox" name="kind" value="${k}" ${k === k0 ? 'checked' : ''}><b>${t}</b><span>${d}</span></label>`).join('')}</fieldset>
           ${(() => { const cur = like ? like.subject : subjects[0] || ''; const list = cur && !subjects.includes(cur) ? [...subjects, cur] : subjects;
-            return list.length ? `<label for="p-subj-pick">Subject<select id="p-subj-pick">${list.map((x) => `<option ${x === cur ? 'selected' : ''}>${esc(x)}</option>`).join('')}<option value="__other">Another subject…</option></select></label>
+            return list.length ? `<label for="p-subj-pick">Subject<select id="p-subj-pick">${list.map((x) => `<option ${x === cur ? 'selected' : ''}>${esc(x)}</option>`).join('')}<option value="__other">Another subject…</option></select><small>Starting a new GCSE? <a href="#plan-for-${esc(sid)}">Add a course</a> to give it a full plan and weekly lessons.</small></label>
             <label for="p-subj" id="p-subj-wrap" hidden>Which subject?<input id="p-subj" maxlength="60" value="${esc(cur)}" autocomplete="off"></label>`
               : `<label for="p-subj">Subject<input id="p-subj" required maxlength="60" autocomplete="off" placeholder="e.g. Mathematics"></label>`; })()}
           <label for="p-title">Title <small>optional, e.g. Fractions of amounts</small><input id="p-title" maxlength="120" value="${esc(like ? (like.title ? like.title.replace(/ \(version \d+\)$/, '') + ' (version 2)' : '') : '')}"></label>
