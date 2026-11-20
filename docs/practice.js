@@ -173,6 +173,9 @@
           <label for="p-note">${like ? 'Anything to change?' : 'Instructions'} <small>optional</small><textarea id="p-note" rows="3" maxlength="1000" placeholder="${like ? 'e.g. A bit harder, and more questions on Q3 type' : 'e.g. Foundation tier, 10 questions, focus on the questions he got wrong'}"></textarea></label>
           <div class="row form-row"><label for="p-min">Time to spend <small>minutes, optional</small><input id="p-min" type="number" min="5" max="240" step="5" value="${like && like.minutes ? like.minutes : ''}"></label>
             <label for="p-due">Due date <small>optional</small><input id="p-due" type="date" min="${ctx.today()}"></label></div>
+          <fieldset class="kind-pick fit-pick"><legend>How does it fit with the weekly lessons?</legend>
+            <label class="kind-opt"><input type="radio" name="fit" value="extra" checked> <b>On top of this week's lessons</b><span>Extra practice. The weekly lessons stay the same.</span></label>
+            <label class="kind-opt"><input type="radio" name="fit" value="instead"> <b>Instead of some of this week's lessons</b><span>The next weekly plan has fewer lessons in this subject, by about the time set above, so the week doesn't get longer.</span></label></fieldset>
           <div id="p-msg"></div><button class="btn primary lg" id="p-go">Send</button>
           <p class="muted small">It will be ready to check after the next evening run (weekdays, about 5:40 PM). ${self ? '' : `${esc(first(st))} won't see it until you assign it.`} Uploads stay private.</p></form></div>`));
       const pick = document.getElementById('p-subj-pick');
@@ -192,9 +195,10 @@
         try {
           let src = like ? like.source_files || [] : []; let up = files;
           const mins = v('p-min') ? Number(v('p-min')) : null;
+          const instead = (document.querySelector('input[name=fit]:checked') || {}).value === 'instead';
           for (const kind of kinds) {
             src = await api.create({ student_id: sid, subject: v('p-subj'), kind, title: v('p-title'), source_text: like ? like.source_text || '' : text, source_files: src, note,
-              minutes: kinds.length > 1 && kind === 'quiz' ? null : mins, due_date: v('p-due') || null, based_on: like ? like.id : null }, up);
+              minutes: kinds.length > 1 && kind === 'quiz' ? null : mins, due_date: v('p-due') || null, based_on: like ? like.id : null, ...(instead ? { replaces_lessons: true } : {}) }, up);
             up = []; // files are uploaded once and shared by every set made from them
           }
           ctx.flashText = kinds.length > 1 ? `Sent ${kinds.length} requests (${kinds.map(kindName).join(', ')}). Ninegrade will prepare them at the next evening run, and they will appear under "Ready for you to check".` : 'Sent. Ninegrade will prepare it at the next evening run, and it will appear under "Ready for you to check".';
@@ -267,7 +271,7 @@
             ${(s.quiz || []).length ? `<h3>Quick questions (mark themselves)</h3><ol class="small">${s.quiz.map((q, i) => `<li>${esc(q.q)} <b class="ok-text">→ ${esc(quizKey(s.quiz)[i])}</b></li>`).join('')}</ol>` : ''}</section>` : ''}
           ${!isStudent && s.status !== 'requested' ? `<details class="panel" id="pans"><summary><b>Answer sheet</b> <span class="muted small">(${esc(first(st))} never sees this)</span></summary><div class="lesson answers"><p class="muted">Loading…</p></div></details>` : ''}
           ${!isStudent && atts.length ? `<section class="panel"><h2>${esc(first(st))}'s tries <span class="count">${atts.length}</span></h2><p class="muted small">Ninegrade marks written answers at the evening run. You can also mark or change anything here.</p>${atts.map((a) => attemptHtml(a, s, true)).join('')}</section>` : ''}
-          <details class="panel"><summary><b>What it was made from</b></summary>${s.source_text ? `<div class="answer-text">${esc(s.source_text.slice(0, 3000))}${s.source_text.length > 3000 ? '…' : ''}</div>` : ''}${srcFiles}${s.note ? `<p class="small"><b>Instructions:</b> ${esc(s.note)}</p>` : ''}${!s.source_text && !srcFiles && !s.note ? '<p class="muted small">Nothing was given.</p>' : ''}${s.based_on ? `<p class="small"><a href="#pset-${esc(s.based_on)}">See the earlier version</a></p>` : ''}</details></div>`));
+          <details class="panel"><summary><b>What it was made from</b></summary>${s.source_text ? `<div class="answer-text">${esc(s.source_text.slice(0, 3000))}${s.source_text.length > 3000 ? '…' : ''}</div>` : ''}${srcFiles}${s.note ? `<p class="small"><b>Instructions:</b> ${esc(s.note)}</p>` : ''}<p class="small"><b>Weekly lessons:</b> ${s.replaces_lessons ? `instead of some ${esc(s.subject)} lessons` : 'on top of them'}</p>${!s.source_text && !srcFiles && !s.note ? '<p class="muted small">Nothing was given.</p>' : ''}${s.based_on ? `<p class="small"><a href="#pset-${esc(s.based_on)}">See the earlier version</a></p>` : ''}</details></div>`));
         const out = document.getElementById('pact-out');
         const go = async (patch, msg, after) => { try { await api.update(s.id, patch); await refreshCounts(); if (msg) ctx.flashText = msg; after ? after() : setPage(s.id); } catch (x) { out.innerHTML = `<p class="msg err">${esc(nice(x))}</p>`; } };
         app.querySelectorAll('[data-pact]').forEach((b) => { b.onclick = async () => {

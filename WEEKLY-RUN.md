@@ -82,7 +82,44 @@ node tools/build-content.mjs /mnt/project-files/lessons/week-NN NN <monday YYYY-
 node tools/db.mjs push-week /mnt/project-files/website/content/week-NN.json
 ```
 
-Add `--publish` only if Usman has said lessons may go live without his approval.
+Never add `--publish`. Lessons go live when the parent approves them, or on Sunday evening if the parent switched on "Publish it anyway" (see below).
+
+## 4a. Catch-up, away days and practice "instead" (Saturday run, Usman 20 Nov 2026)
+
+Do this before writing next week, so the new week fits around it. The point is that nothing piles up for Hadi or the parent.
+These need `v2-catchup.sql`; if `away_days` or `lessons.catch_up` don't exist yet, skip this section and say so in the summary.
+
+1. **Away days.** `node tools/db.mjs get "away_days?select=from_date,to_date,reason,note&student_id=eq.<Hadi's v2 id>&to_date=gte.<last Monday>"`.
+   Write **no lessons** on away days in next week (illness, holiday or exam day). Fewer lessons that week; don't squeeze them onto other days.
+   Lessons already set on an away day this week that have no work sent: set `catch_up=true` (the site already shows them as catch-up).
+2. **Missed lessons** (published, date before today, no submission):
+   - From **this week**: per subject, if half or more of the subject's lessons were missed, make next week a light **catch-up week**
+     for that subject: carry the missed lessons into next week instead of new topics (patch `lesson_date` to a study day next week,
+     `week` to next week, `catch_up=true`), and don't write new lessons for those slots. Otherwise leave them where they are with
+     `catch_up=true` and bring their key skills back in next week's memory quizzes.
+   - **More than 2 weeks old**: set `catch_up=true` and leave them where they are (they sit in the Catch-up list on the site, Hadi does
+     them when he has time). Don't move them again. Recycle their skills into memory quizzes instead.
+   - `node tools/db.mjs patch lessons "id=eq.<id>" '{"catch_up":true}'` (add `"lesson_date"`/`"week"` when carrying a lesson forward).
+   - Never more than 3 carried lessons in one week, and never delete a lesson.
+3. **Practice "instead of" lessons.** `node tools/db.mjs get "practice_sets?select=subject,kind,minutes,due_date,status&student_id=eq.<id>&replaces_lessons=eq.true&status=in.(draft,assigned)"`.
+   For each set due next week (or with no due date and assigned in the last 7 days), cut that subject's lesson time next week by the
+   set's minutes (a mock with no minutes counts as 60, a quiz as 15), dropping whole lessons from the end of the week first. Say what
+   you dropped in the summary. Sets marked "on top" (`replaces_lessons=false`) don't change the week.
+4. In the summary, say how many lessons are in catch-up, whether any subject has a catch-up week, and any away days.
+
+The course card on the site shows "N weeks behind · revision time X weeks instead of Y" from missed lessons, so keep `catch_up` honest.
+
+## Sunday evening: publish anyway (evening run, Sundays only)
+
+Only if `node tools/db.mjs get "study_settings?select=auto_publish&student_id=eq.<Hadi's v2 id>"` returns `auto_publish: true`:
+if the coming week's lessons are still `status=draft`, publish them with `"auto_published":true`:
+
+```
+node tools/db.mjs patch lessons "week=eq.NN&status=eq.draft" '{"status":"published","auto_published":true}'
+```
+
+The parent sees "Published automatically, not checked" and a "Mark as checked" button. Answer sheets stay hidden as usual. Never assign
+practice sets this way; they always wait for the parent. If the setting is off (or missing), leave drafts alone. Mention it in the run summary.
 
 ## 5. Summary
 

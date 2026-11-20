@@ -39,6 +39,9 @@
       async topics() { return must(await sb.from('weak_topics').select('*').order('subject').order('sort')); },
       async updateTopic(id, patch) { must(await sb.from('weak_topics').update(patch).eq('id', id)); },
       async setWeek(week, status) { must(await sb.from('lessons').update({ status }).eq('week', week)); },
+      async markChecked(week) { must(await sb.from('lessons').update({ auto_published: false }).eq('week', week).eq('auto_published', true)); },
+      async settings(sid) { const r = await sb.from('study_settings').select('auto_publish').eq('student_id', sid).maybeSingle(); return r.error ? null : (r.data || { auto_publish: false }); },
+      async setAuto(sid, on) { const { error } = await sb.from('study_settings').upsert({ student_id: sid, auto_publish: on }, { onConflict: 'student_id' }); if (error) throw new Error(/does not exist|schema cache/.test(error.message) ? 'This needs a quick database update first (v2-catchup.sql).' : error.message); },
       async reports() { const r = await sb.from('reports').select('*').order('week', { ascending: false }); return r.error ? [] : r.data; },
     };
   }
@@ -52,11 +55,13 @@
     const quiz = [{ q: 'Which century were the 1800s?', type: 'mc', options: ['18th', '19th'], answer: 1, explain: 'The 1800s are the 19th century.' }, { q: 'Spell the word for a short piece of a text: e _ _ _ _ _ t', type: 'short', accept: ['extract'], explain: 'extract' }];
     const seed = () => ({
       lessons: [
+        { id: 'd0', week: 1, lesson_date: iso(-3), slot: 'b', subject: 'maths', title: 'Fractions of amounts', minutes: 30, body_html: body('Divide by the bottom, times by the top.'), quiz, status: 'published', catch_up: true },
         { id: 'd1', week: 1, lesson_date: iso(-1), slot: 'a', subject: 'english', title: 'Finding information', minutes: 40, body_html: body('Question 1 asks for four facts from the given lines.'), quiz, status: 'published' },
         { id: 'd2', week: 1, lesson_date: iso(0), slot: 'a', subject: 'english', title: 'Reading old sentences', minutes: 35, body_html: body('Split long sentences at commas and semicolons.'), quiz, status: 'published' },
         { id: 'd3', week: 1, lesson_date: iso(0), slot: 'b', subject: 'maths', title: 'Percentages', minutes: 30, body_html: body('10% is one tenth. Find 10%, then build up.'), quiz, status: 'published' },
         { id: 'd4', week: 2, lesson_date: iso(6), slot: 'a', subject: 'english', title: 'Language analysis', minutes: 40, body_html: body('Technique, quote, effect.'), quiz, status: 'draft' }],
-      sheets: { d1: '<h2>Answers</h2><p>Accept any four facts from lines 1 to 8.</p>', d2: '<h2>Answers</h2><p>Example answers.</p>', d3: '<h2>Answers</h2><p>1. 30 2. 45</p>', d4: '<h2>Answers</h2><p>Technique, quote, effect.</p>' },
+      settings: { auto_publish: false },
+      sheets: { d0: '<h2>Answers</h2><p>1. 12 2. 35</p>', d1: '<h2>Answers</h2><p>Accept any four facts from lines 1 to 8.</p>', d2: '<h2>Answers</h2><p>Example answers.</p>', d3: '<h2>Answers</h2><p>1. 30 2. 45</p>', d4: '<h2>Answers</h2><p>Technique, quote, effect.</p>' },
       attempts: [{ lesson_id: 'd1', score: 1, max: 2, answers: [{ given: 1, right: true }, { given: 'extrakt', right: false }], created_at: new Date().toISOString() }],
       subs: [{ id: 1, lesson_id: 'd1', answer_text: 'It is on the north coast of Kent. You travel by steamer...', files: [], minutes_taken: 6, created_at: new Date().toISOString(), mark: 9, mark_max: 9, feedback: 'Excellent work: full marks. Next time write four short numbered points.' },
         { id: 2, lesson_id: 'd3', answer_text: '1. 30  2. 40', files: [], minutes_taken: 12, created_at: new Date(Date.now() - 864e5).toISOString(), mark: 1, mark_max: 2, feedback: 'Q1 is right. Q2: 15% of 300 is 30 + 15 = 45. Find 10%, then half of it for 5%.' }],
@@ -77,6 +82,9 @@
       async topics() { return S.topics; },
       async updateTopic(id, patch) { S.topics.forEach((t) => { if (t.id === id) Object.assign(t, patch); }); save(); },
       async setWeek(week, status) { S.lessons.forEach((l) => { if (l.week === week) l.status = status; }); save(); },
+      async markChecked(week) { S.lessons.forEach((l) => { if (l.week === week) l.auto_published = false; }); save(); },
+      async settings() { return role() === 'admin' ? (S.settings || { auto_publish: false }) : null; },
+      async setAuto(sid, on) { S.settings = { auto_publish: on }; save(); },
       async reports() { return []; },
       reset() { S = seed(); save(); },
     };
@@ -91,8 +99,9 @@
     async function init() { role = await api.access().catch(() => null); D = null; checked = true; return role; }
     function forget() { role = null; D = null; checked = false; }
     async function load() {
-      const [lessons, attempts, subs] = await Promise.all([api.lessons(), api.attempts(), api.subs()]);
-      D = { lessons, attempts, subs, byId: Object.fromEntries(lessons.map((l) => [l.id, l])) }; return D;
+      const who = ctx.who ? ctx.who(role) : null;
+      const [lessons, attempts, subs, away] = await Promise.all([api.lessons(), api.attempts(), api.subs(), who && ctx.awayDays ? ctx.awayDays(who).catch(() => null) : null]);
+      D = { lessons, attempts, subs, away: away || [], who, byId: Object.fromEntries(lessons.map((l) => [l.id, l])) }; return D;
     }
     const prog = (id) => {
       const at = D.attempts.filter((a) => a.lesson_id === id);
@@ -104,15 +113,21 @@
     const dKey = (id, kind) => `ng-draft:${ctx.getMeId() || 'x'}:${id}:${kind}`;
     const dGet = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
     const dSet = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage blocked */ } };
-    const pill = (id) => { const p = prog(id);
+    // Away days (illness, holidays, exam days) set by the parent: lessons on those days become catch-up.
+    const awayOn = (date) => (D && D.away || []).find((a) => a.from_date <= date && date <= a.to_date);
+    const AWAY_WHY = { ill: 'Unwell', holiday: 'Holiday', exam: 'Exam day', other: 'Away' };
+    const pill = (id) => { const p = prog(id); const l = D.byId[id] || {};
       if (p.marked) return `<span class="pill done">Marked ${p.marked.mark}/${p.marked.mark_max}</span>`;
       if (p.sent) return '<span class="pill sent">Sent, waiting for marking</span>';
+      const aw = awayOn(l.lesson_date || '');
+      if (aw) return `<span class="pill away">${AWAY_WHY[aw.reason] || 'Away'} · catch-up${role === 'admin' ? '' : ', when you can'}</span>`;
+      if (l.catch_up) return `<span class="pill catchup">${role === 'admin' ? 'Catch-up' : 'Catch-up, do when you can'}</span>`;
       const late = ((D.byId[id] || {}).lesson_date || '9') < today();
       if (p.best) return `<span class="pill ${late ? 'missed' : 'todo'}">Quiz ${p.best.score}/${p.best.max}, work not sent</span>`;
       return late ? `<span class="pill missed">${role === 'admin' ? 'Missed' : 'Missed, please catch up'}</span>` : '<span class="pill todo">Not started</span>'; };
     const card = (l, o = {}) => `<a class="lesson-card" href="#lesson-${esc(l.id)}"><span class="stripe ${l.subject}"></span>
       <span class="lc-body"><span class="subj ${l.subject}">${SUBJECTS[l.subject] || l.subject}${o.date ? ` · ${fmtDay(l.lesson_date, { weekday: 'short', day: 'numeric', month: 'short' })}` : ''}</span>
-      <span class="lc-title">${esc(l.title)}</span><span class="muted small">About ${l.minutes} minutes${l.status === 'draft' ? ' · <span class="pill draft">Not published yet</span>' : ''}</span></span>
+      <span class="lc-title">${esc(l.title)}</span><span class="muted small">About ${l.minutes} minutes${l.status === 'draft' ? ' · <span class="pill draft">Not published yet</span>' : ''}${role === 'admin' && l.auto_published ? ' · <span class="pill auto">Not checked</span>' : ''}</span></span>
       <span class="lc-status">${l.status === 'draft' ? '' : pill(l.id)}</span></a>`;
     const toMark = () => (D ? D.subs.filter((s) => s.mark == null).length : 0);
 
@@ -150,16 +165,22 @@
       const t = today(); const ls = D.lessons;
       const todays = ls.filter((l) => l.lesson_date === t); const next = ls.find((l) => l.lesson_date > t);
       const nextDay = next ? ls.filter((l) => l.lesson_date === next.lesson_date) : [];
-      const catchUp = ls.filter((l) => l.lesson_date < t && !prog(l.id).sent).slice(-4);
-      const main = todays.length ? `<section class="panel"><h2>Today's lessons</h2><p class="muted">Do them in order, with a 10-minute break in between.</p><div class="lesson-list">${todays.map((l) => card(l)).join('')}</div></section>`
+      const missed = ls.filter((l) => stateOf(l) === 'missed').slice(-4);
+      const catchUp = ls.filter((l) => stateOf(l) === 'catchup' && l.lesson_date <= t).slice(0, 6);
+      const awayToday = awayOn(t);
+      const main = awayToday ? `<section class="panel away-today"><h2>${awayToday.reason === 'ill' ? 'Rest and get better' : awayToday.reason === 'holiday' ? 'Enjoy your holiday' : awayToday.reason === 'exam' ? 'Good luck today' : 'Day off'}</h2><p class="muted">No lessons are set for today${awayToday.to_date > t ? ` or until ${fmtDay(awayToday.to_date, { weekday: 'long', day: 'numeric', month: 'short' })}` : ''}. Anything you miss moves to catch-up, so there's nothing to worry about.</p>${todays.length ? `<details><summary class="small">Today's lessons, if you feel up to it</summary><div class="lesson-list">${todays.map((l) => card(l)).join('')}</div></details>` : ''}</section>`
+        : todays.length ? `<section class="panel"><h2>Today's lessons</h2><p class="muted">Do them in order, with a 10-minute break in between.</p><div class="lesson-list">${todays.map((l) => card(l)).join('')}</div></section>`
         : nextDay.length ? `<section class="panel"><h2>No lessons today</h2><p class="muted">Next up, ${fmtDay(next.lesson_date)}:</p><div class="lesson-list">${nextDay.map((l) => card(l)).join('')}</div></section>`
         : '<section class="panel"><h2>No new lessons yet</h2><p class="muted">Next week\'s lessons will appear here once they are ready.</p></section>';
       shell('today', page(`<div class="narrow"><div class="page-head"><p class="kicker dark">${fmtDay(t)}</p><h1>Today</h1></div>${main}
-        ${catchUp.length ? `<section class="panel"><h2>Still to send</h2><p class="muted">These lessons don't have any work sent yet.</p><div class="lesson-list">${catchUp.map((l) => card(l, { date: true })).join('')}</div></section>` : ''}</div>`));
+        ${missed.length ? `<section class="panel"><h2>Still to send</h2><p class="muted">These lessons don't have any work sent yet.</p><div class="lesson-list">${missed.map((l) => card(l, { date: true })).join('')}</div></section>` : ''}
+        ${catchUp.length ? `<section class="panel"><div class="panel-head"><h2>Catch-up</h2><a class="small" href="#lessons" data-go-catchup>See all</a></div><p class="muted">Older lessons to do when you have spare time. Today's lessons come first.</p><div class="lesson-list">${catchUp.map((l) => card(l, { date: true })).join('')}</div></section>` : ''}</div>`));
+      app.querySelectorAll('[data-go-catchup]').forEach((a) => { a.onclick = () => { statusPick = 'catchup'; subjPick = 'all'; }; });
     }
 
     // Lesson status for the filters: done = work sent, missed = past and not sent, todo = not sent yet.
-    const stateOf = (l) => (prog(l.id).sent ? 'done' : l.lesson_date < today() ? 'missed' : 'todo');
+    // catchup = moved to catch-up by the Saturday run, or set on an away day.
+    const stateOf = (l) => (prog(l.id).sent ? 'done' : l.catch_up || awayOn(l.lesson_date) ? 'catchup' : l.lesson_date < today() ? 'missed' : 'todo');
     let statusPick = 'all';
     function lessonsView() {
       const admin = role === 'admin';
@@ -170,22 +191,38 @@
       const weeks = groupBy(shown, (l) => l.week);
       const nums = Object.keys(weeks).map(Number).sort((a, b) => b - a);
       const mon = (() => { const d = new Date(today() + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); })();
-      const statusChips = `<div class="chips" role="group" aria-label="Show lessons">${[['all', 'All'], ['todo', 'To do'], ['missed', 'Missed'], ['done', 'Done']].map(([k, t]) => `<button type="button" class="chip ${k === statusPick ? 'on' : ''} ${k === 'missed' && sc.missed ? 'warn' : ''}" data-status="${k}" aria-pressed="${k === statusPick}">${t}<span>${sc[k] || 0}</span></button>`).join('')}</div>`;
-      const emptyMsg = statusPick === 'missed' ? 'Nothing missed. Well done!' : statusPick === 'todo' ? 'Nothing left to do here.' : statusPick === 'done' ? 'No work sent yet.' : 'No lessons yet.';
+      const statusChips = `<div class="chips" role="group" aria-label="Show lessons">${[['all', 'All'], ['todo', 'To do'], ['catchup', 'Catch-up'], ['missed', 'Missed'], ['done', 'Done']].map(([k, t]) => `<button type="button" class="chip ${k === statusPick ? 'on' : ''} ${k === 'missed' && sc.missed ? 'warn' : ''}" data-status="${k}" aria-pressed="${k === statusPick}">${t}<span>${sc[k] || 0}</span></button>`).join('')}</div>`;
+      const emptyMsg = statusPick === 'missed' ? 'Nothing missed. Well done!' : statusPick === 'catchup' ? 'Nothing to catch up on.' : statusPick === 'todo' ? 'Nothing left to do here.' : statusPick === 'done' ? 'No work sent yet.' : 'No lessons yet.';
       shell('lessons', page(`<div class="${admin ? '' : 'narrow'}"><div class="page-head"><p class="kicker dark">${admin ? "Hadi's lessons" : 'Lessons'}</p><h1>${admin ? 'Lessons and approval' : 'All lessons'}</h1>
         ${admin ? '<p class="muted">New weeks arrive as drafts. Open a lesson to read it with its answer sheet, then approve the week to show it to Hadi.</p>' : ''}</div>
+        ${admin ? '<section class="panel" id="auto-box"></section>' : ''}
         ${subjChips(subjCounts(D.lessons.map((l) => l.subject)))}${statusChips}
         ${nums.map((w) => { const l = weeks[w]; const whole = D.lessons.filter((x) => x.week === w); const draft = whole.some((x) => x.status === 'draft'); const days = groupBy(l, (x) => x.lesson_date);
           const past = whole.every((x) => x.lesson_date < mon); const open = !past || statusPick !== 'all' || (admin && draft);
           const wl = whole.filter(inSubj); const nDone = wl.filter((x) => stateOf(x) === 'done').length; const nMiss = wl.filter((x) => stateOf(x) === 'missed').length;
-          const summary = `${nDone} of ${wl.length} done${nMiss ? ` · <span class="miss-n">${nMiss} missed</span>` : ''}`;
+          const nCatch = wl.filter((x) => stateOf(x) === 'catchup').length; const auto = whole.some((x) => x.auto_published && x.status === 'published');
+          const summary = `${nDone} of ${wl.length} done${nMiss ? ` · <span class="miss-n">${nMiss} missed</span>` : ''}${nCatch ? ` · ${nCatch} catch-up` : ''}`;
           const list = Object.keys(days).sort().map((d) => `<div class="day-group"><h3>${fmtDay(d)}</h3><div class="lesson-list">${days[d].map((x) => card(x)).join('')}</div></div>`).join('');
           return `<section class="panel"><div class="panel-head"><div><h2>Week ${w}</h2><span class="muted small">Starts ${fmtDay(whole[0].lesson_date, { day: 'numeric', month: 'long', year: 'numeric' })} · ${summary}</span></div>
-            ${admin ? `<div class="row">${draft ? '<span class="pill draft">Waiting for your approval</span>' : '<span class="pill done">Live for Hadi</span>'}<button class="btn ${draft ? 'primary' : 'ghost'} sm" data-week="${w}" data-to="${draft ? 'published' : 'draft'}">${draft ? 'Approve and publish' : 'Hide from Hadi'}</button></div>` : ''}</div>
+            ${admin ? `<div class="row">${draft ? '<span class="pill draft">Waiting for your approval</span>' : auto ? `<span class="pill auto">Published automatically, not checked</span><button class="btn primary sm" data-checked="${w}">Mark as checked</button>` : '<span class="pill done">Live for Hadi</span>'}<button class="btn ${draft ? 'primary' : 'ghost'} sm" data-week="${w}" data-to="${draft ? 'published' : 'draft'}">${draft ? 'Approve and publish' : 'Hide from Hadi'}</button></div>` : ''}</div>
             <details class="wk-fold" data-wk="${w}" ${open ? 'open' : ''}><summary><span class="when-closed">Show the ${l.length} lesson${l.length > 1 ? 's' : ''}</span><span class="when-open">Hide lessons</span></summary>${list}</details></section>`; }).join('') || `<section class="panel"><p class="muted">${emptyMsg}</p></section>`}</div>`));
       app.querySelectorAll('[data-week]').forEach((b) => { b.onclick = async () => { b.disabled = true; await api.setWeek(Number(b.dataset.week), b.dataset.to); await load(); lessonsView(); }; });
       app.querySelectorAll('[data-subj]').forEach((b) => { b.onclick = () => { subjPick = b.dataset.subj; lessonsView(); }; });
       app.querySelectorAll('[data-status]').forEach((b) => { b.onclick = () => { statusPick = b.dataset.status; lessonsView(); }; });
+      app.querySelectorAll('[data-checked]').forEach((b) => { b.onclick = async () => { b.disabled = true; await api.markChecked(Number(b.dataset.checked)); await load(); lessonsView(); }; });
+      if (admin) autoBox();
+    }
+    async function autoBox() {
+      const box = document.getElementById('auto-box'); if (!box) return;
+      const st = await api.settings(D.who).catch(() => null);
+      if (!document.body.contains(box)) return;
+      box.innerHTML = `<div class="panel-head"><h2>If you haven't checked next week</h2></div>
+        ${st === null ? '<p class="msg info">This setting needs a quick database update first (v2-catchup.sql).</p>' : `<label class="switch-row"><input type="checkbox" id="auto-pub" ${st.auto_publish ? 'checked' : ''}> <span><b>Publish it anyway</b><br><span class="muted small">If next week is still waiting for approval at the Sunday evening run (about 5:40 PM), it is published so Hadi isn't held up. It shows here as "Published automatically, not checked" until you mark it checked. Practice sets you made still wait for you.</span></span></label><div id="auto-msg" aria-live="polite"></div>`}`;
+      const cb = document.getElementById('auto-pub'); if (!cb) return;
+      cb.onchange = async () => { cb.disabled = true; const m = document.getElementById('auto-msg');
+        try { await api.setAuto(D.who, cb.checked); m.innerHTML = `<p class="msg ok small">${cb.checked ? 'On. Unchecked weeks will be published on Sunday evening.' : 'Off. Weeks wait for your approval.'}</p>`; }
+        catch (x) { cb.checked = !cb.checked; m.innerHTML = `<p class="msg err">${esc(x.message)}</p>`; }
+        cb.disabled = false; };
     }
 
     function quizHtml(q, l) {

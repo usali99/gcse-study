@@ -469,3 +469,13 @@ details.panel > summary { cursor: pointer; }
 @media (max-width: 640px) { .kind-pick { grid-template-columns: 1fr; } }
 .kind-pick legend small { display: block; font-weight: 400; color: var(--muted); font-size: .85rem; margin-top: 2px; }
 [hidden] { display: none !important; }
+.away-list { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 8px; }
+.away-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.away-row > span:nth-child(2) { flex: 1; min-width: 160px; }
+.pill.catchup { background: color-mix(in srgb, var(--review) 16%, var(--surface)); color: color-mix(in srgb, var(--review) 70%, var(--ink)); border-color: color-mix(in srgb, var(--review) 35%, transparent); }
+.pill.away { background: var(--surface-2); color: var(--ink-2); }
+.pill.auto { background: color-mix(in srgb, var(--teach) 12%, var(--surface)); color: var(--teach); }
+.switch-row { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; }
+.switch-row input { width: 20px; height: 20px; margin-top: 2px; flex: none; }
+.away-today { border-left: 4px solid var(--review); }
+.fit-pick { margin-top: 4px; }

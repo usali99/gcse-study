@@ -62,6 +62,9 @@
         return { people, schools, members, classes, classStudents, guardianships, courses, invites, requests, feedback, usernames };
       },
       async addCourse(c) { must(await sb.from('courses').insert(c)); },
+      async awayDays(sid) { const r = await sb.from('away_days').select('*').eq('student_id', sid).order('from_date'); return r.error ? null : r.data; },
+      async addAway(a) { const { error } = await sb.from('away_days').insert(a); if (error) throw new Error(/does not exist|schema cache/.test(error.message) ? 'Away days need a quick database update first. Ask the site owner to run v2-catchup.sql.' : /check constraint/.test(error.message) ? 'Check the dates: the last day must be on or after the first, and at most 60 days later.' : error.message); },
+      async deleteAway(id) { must(await sb.from('away_days').delete().eq('id', id)); },
       async lessonRequests(sid) { const r = await sb.from('lesson_requests').select('*').eq('student_id', sid).order('created_at', { ascending: false }).limit(3); return r.error ? null : r.data; },
       async requestLessons(sid, note) { const { error } = await sb.from('lesson_requests').insert({ student_id: sid, note }); if (error) throw new Error(/does not exist|schema cache/.test(error.message) ? 'This needs a quick database update first. Ask the site owner to run v2-lesson-requests.sql.' : /a lot of times|sign in/i.test(error.message) ? error.message : 'Sorry, that did not send. Please try again.'); },
       async updateCourse(id, patch) { const r = await sb.from('courses').update(patch).eq('id', id); if (r.error) throw new Error(/study_days/.test(r.error.message) ? 'Study days need a quick database update first. Ask the site owner to run v2-timetable.sql.' : r.error.message); },
@@ -167,6 +170,11 @@
           usernames: S.guardianships.filter((g) => g.parent_id === m.id).map((g) => ({ id: g.student_id, username: childUser((S.people.find((p) => p.id === g.student_id) || {}).email) })).filter((x) => x.username),
         };
       },
+      async awayDays(sid) { return (S.away || []).filter((a) => a.student_id === sid && canManage(sid)).sort((a, b) => a.from_date.localeCompare(b.from_date)); },
+      async addAway(a) { const m = me(); const managed = S.guardianships.some((g) => g.student_id === a.student_id) || S.classStudents.some((x) => x.student_id === a.student_id);
+        if (!canManage(a.student_id) || (m.id === a.student_id && managed)) throw new Error('Your parent sets away days.'); if (a.to_date < a.from_date) throw new Error('Check the dates: the last day must be on or after the first, and at most 60 days later.');
+        S.away = S.away || []; S.away.push({ ...a, id: uid(), created_by: m.id, created_at: new Date().toISOString() }); save(); },
+      async deleteAway(id) { S.away = (S.away || []).filter((a) => a.id !== id); save(); },
       async lessonRequests(sid) { return (S.lessonRequests || []).filter((r) => r.student_id === sid).slice(0, 3); },
       async requestLessons(sid, note) { if (!canManage(sid)) throw new Error('You can only ask for your own students.'); S.lessonRequests = S.lessonRequests || []; S.lessonRequests.unshift({ id: uid(), student_id: sid, requested_by: meId, note, status: 'new', reply: '', created_at: new Date().toISOString() }); save(); },
       async updateCourse(id, patch) { const c = S.courses.find((x) => x.id === id); if (!c || !canManage(c.student_id)) throw new Error('You can only change courses for your own students.'); Object.assign(c, patch); save(); },
@@ -221,7 +229,7 @@
       catch (y) { btn.disabled = false; btn.textContent = 'Send report'; wrap.querySelector('#rp-msg').innerHTML = `<p class="msg err">${esc(y.message)}</p>`; }
     };
   });
-  const study = window.createStudy({ sb: api.sb, demo: api.demo, getMeId: () => me && me.id, shell: (...a) => shell(...a), page: (...a) => page(...a), esc, today, app, report });
+  const study = window.createStudy({ awayDays: (sid) => api.awayDays(sid), who: (r) => (!me ? null : r === 'student' ? me.id : (childrenOf(me.id)[0] || {}).id), sb: api.sb, demo: api.demo, getMeId: () => me && me.id, shell: (...a) => shell(...a), page: (...a) => page(...a), esc, today, app, report });
   const practice = window.createPractice({ sb: api.sb, demo: api.demo, esc, fmt, today, app, shell: (...a) => shell(...a), page: (...a) => page(...a), me: () => me, D: () => D, person: (id) => person(id), managedBy: (sid) => managedBy(sid), setByNote: (sid) => setByNote(sid) });
 
   // Derived lookups over the loaded data.
@@ -451,7 +459,7 @@
     return `<a class="course" href="#course-${esc(c.id)}">
       <div class="course-top">${ring(total ? done / total * 100 : 0, 46, `${done} of ${total} weeks done`)}<span class="subject">${esc(c.subject)}</span></div>
       <div class="course-meta">${esc(c.board)} · ${esc(c.qualification)}${c.code ? ' · ' + esc(c.code) : ''}${c.tier ? ' · ' + esc(c.tier) : ''}${showStudent ? ` · <b>${esc(person(c.student_id).full_name)}</b>` : ''} · ${weeksUntil(c.exam_date)} weeks to go</div>
-      ${late ? `<div class="behind-line"><span class="tag behind">Behind</span>${late} past week${late > 1 ? 's' : ''} not ticked done</div>` : ''}
+      ${late ? `<div class="behind-line"><span class="tag behind">Behind</span>${late} past week${late > 1 ? 's' : ''} not ticked done${(() => { const r = (c.plan || []).filter((x) => x.kind === 'revision' && x.start > today()).length; return r ? ` · revision time ${Math.max(0, r - late)} week${r - late === 1 ? '' : 's'} instead of ${r}` : ''; })()}</div>` : ''}
       ${w ? `<div class="course-now"><span class="kind kind-${w.kind}">${w.kind === 'teach' ? 'This week' : w.kind === 'review' ? 'Review week' : w.kind === 'revision' ? 'Revision' : 'Break'}</span>${esc(w.title)}</div>` : ''}
       <div class="meter" role="img" aria-label="${done} of ${total} weeks done"><span style="width:${total ? Math.round(done / total * 100) : 0}%"></span></div>
     </a>`;
@@ -589,6 +597,27 @@
       b.disabled = false; list(); };
     list();
   }
+  const AWAY = { ill: 'Unwell', holiday: 'Holiday', exam: 'Exam or test day', other: 'Other' };
+  async function wireAway(sid, ro) {
+    const box = document.getElementById('away-box'); if (!box) return;
+    const list = await api.awayDays(sid).catch(() => null);
+    const t = today(); const nm = sid === me.id ? 'you' : esc(person(sid).full_name.split(' ')[0]);
+    const span = (a) => (a.from_date === a.to_date ? fmt(a.from_date, { weekday: 'short', day: 'numeric', month: 'short' }) : `${fmt(a.from_date, { weekday: 'short', day: 'numeric', month: 'short' })} to ${fmt(a.to_date, { weekday: 'short', day: 'numeric', month: 'short' })}`);
+    const upcoming = (list || []).filter((a) => a.to_date >= t); const past = (list || []).filter((a) => a.to_date < t);
+    const row = (a) => `<li class="away-row"><span class="tag">${AWAY[a.reason] || 'Away'}</span><span>${span(a)}${a.note ? ` <span class="muted small">· ${esc(a.note)}</span>` : ''}</span>${ro ? '' : `<button type="button" class="btn ghost sm" data-away-del="${esc(a.id)}">Remove</button>`}</li>`;
+    box.innerHTML = `<h2>Away days</h2><p class="muted small">${ro ? 'Days off your parent or teacher has set. No lessons are made for them.' : `Illness, holidays or exam days. No lessons are made for these days, and lessons already set for them move to catch-up, so nothing piles up for ${nm}.`}</p>
+      ${list === null ? '<p class="msg info">Away days need a quick database update first (v2-catchup.sql).</p>' : `${upcoming.length ? `<ul class="away-list">${upcoming.map(row).join('')}</ul>` : '<p class="muted">No away days coming up.</p>'}${past.length ? `<details><summary class="small">Past away days (${past.length})</summary><ul class="away-list">${past.map(row).join('')}</ul></details>` : ''}`}
+      ${ro || list === null ? '' : `<form id="away-form" class="row form-row"><label for="aw-from">First day<input id="aw-from" type="date" required value="${t}"></label><label for="aw-to">Last day<input id="aw-to" type="date" required value="${t}"></label>
+        <label for="aw-why">Reason<select id="aw-why">${Object.entries(AWAY).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label><label for="aw-note" class="grow">Note (optional)<input id="aw-note" maxlength="200"></label><button class="btn primary">Add away days</button></form><div id="away-msg"></div>`}`;
+    if (ro || list === null) return;
+    const from = document.getElementById('aw-from'); const to = document.getElementById('aw-to');
+    from.onchange = () => { if (to.value < from.value) to.value = from.value; to.min = from.value; };
+    document.getElementById('away-form').onsubmit = async (e) => { e.preventDefault(); const b = e.target.querySelector('button'); b.disabled = true;
+      try { await api.addAway({ student_id: sid, from_date: from.value, to_date: to.value, reason: document.getElementById('aw-why').value, note: document.getElementById('aw-note').value.trim() }); await wireAway(sid, ro);
+        document.getElementById('away-msg').innerHTML = '<p class="msg ok">Saved. Lessons on those days will move to catch-up at the next run.</p>'; }
+      catch (x) { b.disabled = false; document.getElementById('away-msg').innerHTML = `<p class="msg err">${esc(x.message)}</p>`; } };
+    box.querySelectorAll('[data-away-del]').forEach((b) => { b.onclick = async () => { b.disabled = true; await api.deleteAway(b.dataset.awayDel).catch(() => {}); wireAway(sid, ro); }; });
+  }
   function timetablePage(sid) {
     const st = person(sid); const cs = coursesOf(sid); const ro = !canEditPlan(sid);
     const draw = (msg) => {
@@ -599,8 +628,8 @@
           ${cs.map((c) => `<tr><td><b>${esc(c.subject)}</b><small class="muted">${c.hours_per_week} h a week</small></td>${DAYS.map((d, i) => `<td><input type="checkbox" data-c="${esc(c.id)}" data-d="${i + 1}" ${sel[c.id].includes(i + 1) ? 'checked' : ''} aria-label="${esc(c.subject)} on ${DAYS_LONG[i]}" ${ro ? 'disabled' : ''}></td>`).join('')}<td class="muted small" data-per="${esc(c.id)}"></td></tr>`).join('')}
           </tbody><tfoot><tr><th>Total</th>${DAYS.map((d, i) => `<td class="small" data-tot="${i + 1}"></td>`).join('')}<td></td></tr></tfoot></table></div>
           ${ro ? '' : '<div class="row" style="margin-top:14px"><button class="btn primary" id="t-save">Save timetable</button><button class="btn ghost sm" id="t-even">Suggest days for me</button></div>'}</section>`
-          : '<section class="panel"><p class="muted">Add a course first, then choose its days here.</p></section>'}${lessonBox(sid)}`));
-      wireLessonBox(sid);
+          : '<section class="panel"><p class="muted">Add a course first, then choose its days here.</p></section>'}<section class="panel" id="away-box"><h2>Away days</h2><p class="muted small">Loading…</p></section>${lessonBox(sid)}`));
+      wireLessonBox(sid); wireAway(sid, ro);
       if (!cs.length) return;
       const read = () => Object.fromEntries(cs.map((c) => [c.id, [...app.querySelectorAll(`[data-c="${c.id}"]:checked`)].map((x) => Number(x.dataset.d))]));
       const sums = () => { const r = read(); const tot = [0, 0, 0, 0, 0, 0, 0, 0];
