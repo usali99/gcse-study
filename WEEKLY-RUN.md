@@ -191,6 +191,8 @@ make a fresh version of that set with NEW questions, same level and length, unle
    practice bucket). If given, they ARE the mark scheme: build the answer sheet from them (tidy layout, keep their answers and
    marks exactly), and only add answers for questions they don't cover, labelled "(added by Ninegrade)". If the parent's answer
    looks wrong, keep it but add a short "Check:" note for the parent. Mark tries against the parent's answers. Never show them to the student.
+   Number every question as `<p><b>1.</b> …</p>` or `<p><b>1a.</b> …</p>` (marks in brackets at the end) and use `<h2>` for sections:
+   the student's answer box is pre-filled from these, so they answer under each question. In a lesson, put the questions after an `<h2>` containing "Your turn".
    Never put answers in `body_html` or `quiz` explanations of written questions. `body_html` is shown as-is: use simple
    HTML (h2, h3, p, ol, ul, table, b, i), no scripts, no images from outside.
 4. Write the answer sheet (mark scheme with marks, model answers, common mistakes) "For the parent only." Keep the parent's `given_text`/`given_files` (the upsert below only changes `body_html`).

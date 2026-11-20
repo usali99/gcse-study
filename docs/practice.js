@@ -334,11 +334,13 @@
       const tick = setInterval(() => { if (!document.body.contains(minEl)) return clearInterval(tick); if (!minEl.dataset.touched) minEl.value = Math.max(1, Math.round((Date.now() - started) / 6e4)); }, 15000);
       minEl.oninput = () => { minEl.dataset.touched = 1; };
       const ans = document.getElementById('pw-ans');
+      const tpl = ans ? answerTemplate(app.querySelector('article.lesson')) : '';
+      if (ans && tpl) ans.value = tpl;
       if (ans && draft && draft.text) ans.value = draft.text;
-      if (ans) ans.oninput = () => { try { localStorage.setItem(dk, JSON.stringify({ text: ans.value })); } catch (e) { /* blocked */ } };
+      if (ans) ans.oninput = () => { try { if (ans.value.trim() && ans.value !== tpl) localStorage.setItem(dk, JSON.stringify({ text: ans.value })); else localStorage.removeItem(dk); } catch (e) { /* blocked */ } };
       document.getElementById('pwork').onsubmit = async (e) => {
         e.preventDefault(); const msg = document.getElementById('pw-msg'); const b = document.getElementById('pw-go');
-        const text = ans ? ans.value.trim() : ''; const files = document.getElementById('pw-photos') ? [...document.getElementById('pw-photos').files] : [];
+        const typed = ans ? ans.value.trim() : ''; const text = typed === tpl.trim() ? '' : typed; const files = document.getElementById('pw-photos') ? [...document.getElementById('pw-photos').files] : [];
         const r = quiz.length ? markQuiz(quiz, document.getElementById('pquiz'), true) : null;
         if (written && !text && !files.length && !(r && r.answers.some((x) => x.given !== null && x.given !== ''))) { msg.innerHTML = '<p class="msg err">Type your answers or add a photo first.</p>'; return; }
         if (!written && r && !r.answers.some((x) => x.given !== null && x.given !== '')) { msg.innerHTML = '<p class="msg err">Answer at least one question first.</p>'; return; }
@@ -353,6 +355,25 @@
         } catch (x) { b.disabled = false; b.textContent = 'Send'; msg.innerHTML = `<p class="msg err">${esc(nice(x))}</p>`; }
       };
       fileLinks();
+    }
+
+    // Pre-fill the answer box with the set's numbered questions (after "Your turn" if there is one), so the student
+    // answers under each one, as on the weekly lessons.
+    function answerTemplate(root) {
+      if (!root) return '';
+      const heads = [...root.querySelectorAll('h2')]; const turn = heads.find((h) => /your turn/i.test(h.textContent));
+      const stop = /exit check|memory quiz|before you send|learn it|worked example/i;
+      const short = (t) => { t = t.replace(/\s+/g, ' ').replace(/\(\d+ marks?\)/i, '').trim(); return t.length > 70 ? t.slice(0, 67).trim() + '…' : t; };
+      const out = []; let on = !turn;
+      root.querySelectorAll('h2, h3, p, ol > li').forEach((el) => {
+        if (el.tagName === 'H2') { if (el === turn) { on = true; return; } if (stop.test(el.textContent)) { on = false; return; } if (turn && heads.indexOf(el) < heads.indexOf(turn)) return; if (on) out.push('\n' + short(el.textContent)); return; }
+        if (!on || el.tagName === 'H3') return;
+        if (el.tagName === 'LI') { const ol = el.parentElement; const n = Number(ol.getAttribute('start') || 1) + [...ol.children].indexOf(el); out.push(`${n}. ${short(el.textContent)}\n   Answer: `); return; }
+        const f = el.firstElementChild; const lead = f && /^(B|STRONG)$/.test(f.tagName) && el.textContent.trim().startsWith(f.textContent.trim()) ? f.textContent.trim() : '';
+        if (/^(Q\s*)?\d+[a-z]?[.)]?$/i.test(lead)) out.push(`${lead.replace(/[.)]$/, '')}. ${short(el.textContent.trim().slice(lead.length))}\n   Answer: `);
+      });
+      while (out.length && !out[out.length - 1].includes('Answer:')) out.pop();
+      return out.length ? out.join('\n').replace(/^\n+/, '') + '\n' : '';
     }
 
     async function route(r) {

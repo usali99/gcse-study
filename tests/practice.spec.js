@@ -173,3 +173,26 @@ test('"Write similar new questions" is saved as not as-is', async ({ page }) => 
   const s = await page.evaluate(() => JSON.parse(localStorage.getItem('gcse-v2-practice-demo')).sets[0]);
   expect(s.as_is).toBeFalsy();
 });
+
+test('the answer box is pre-filled with the set\'s numbered questions, and an untouched box counts as empty', async ({ page }) => {
+  await signIn(page, 'usman');
+  await page.evaluate(() => { const k = 'gcse-v2-practice-demo'; const s = JSON.parse(localStorage.getItem(k)) || { sets: [], answers: {}, attempts: [] };
+    s.sets.unshift({ id: 'pt', student_id: 'hadi', created_by: 'usman', subject: 'Physics', kind: 'practice', title: 'Paper A', source_text: '', source_files: [], note: '', status: 'assigned', quiz: [], reply: '',
+      body_html: '<h2>Question 1: Density</h2><p><b>1a.</b> Describe particles in a solid. <span class="marks">(2 marks)</span></p><p><b>1b.</b> Calculate the density. (3 marks)</p><h2>Question 2</h2><p><b>2a.</b> Name the meter for current.</p><p><b>Before you send:</b> check units.</p>',
+      created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+    localStorage.setItem(k, JSON.stringify(s)); });
+  await page.reload();
+  await signOut(page);
+  await signIn(page, 'hadi');
+  await go(page, '#pset-pt');
+  const v = await page.inputValue('#pw-ans');
+  expect(v).toContain('Question 1: Density\n1a. Describe particles in a solid.\n   Answer: ');
+  expect(v).toContain('2a. Name the meter for current.\n   Answer: ');
+  expect(v).not.toContain('Before you send');
+  expect(v).not.toContain('marks');
+  await page.click('#pw-go');
+  await expect(page.locator('#pw-msg')).toContainText('Type your answers');
+  await page.fill('#pw-ans', v.replace('1a. Describe particles in a solid.\n   Answer: ', '1a. Describe particles in a solid.\n   Answer: close together, vibrate'));
+  await page.click('#pw-go');
+  await expect(page.locator('#pw-msg')).toContainText('Sent');
+});
