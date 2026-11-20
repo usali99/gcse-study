@@ -116,3 +116,20 @@ test('ticking all four makes four sets from one upload', async ({ page }) => {
   await expect(page.locator('#flash')).toContainText('Sent 4 requests');
   await expect(page.locator('.panel', { hasText: 'Being prepared' }).locator('.pset-card')).toHaveCount(5);
 });
+
+test('subject is a list of the student\'s courses, with "Another subject" to type one', async ({ page }) => {
+  await signIn(page, 'usman');
+  await go(page, '#pnew-hadi');
+  const opts = await page.locator('#p-subj-pick option').allTextContents();
+  expect(opts.length).toBeGreaterThanOrEqual(5);
+  expect(opts).toContain('Another subject…');
+  await page.selectOption('#p-subj-pick', { index: 1 });
+  await expect(page.locator('#p-subj')).toBeHidden();
+  await page.selectOption('#p-subj-pick', '__other');
+  await expect(page.locator('#p-subj')).toBeVisible();
+  await page.fill('#p-subj', 'Computer Science');
+  await page.fill('#p-text', 'Binary numbers');
+  await page.click('#p-go');
+  await expect(page).toHaveURL(/#practice-hadi/);
+  await expect(page.locator('.pset-card', { hasText: 'Computer Science' })).toHaveCount(1);
+});
