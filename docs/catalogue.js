@@ -41,6 +41,21 @@
     { board: B.cie, qual: 'IGCSE', subject: 'Mathematics', code: '0580', tiers: ['Core', 'Extended'], topics: { Core: MATHS_F, Extended: MATHS_F.concat(MATHS_H_EXTRA) } },
   ];
 
+  // 11+ (grammar and independent school entrance), taken in September of Year 6. Same four subjects for every test;
+  // the plan and practice follow the test's style. Topic lists written from knowledge of the common question types.
+  const E11 = { kent: 'Kent Test', gl: 'GL Assessment (other grammar schools)', csse: 'CSSE (Essex)', iseb: 'ISEB Common Pre-Test', other: 'Another 11+ test' };
+  const MA11 = ['Place value, rounding and negative numbers', 'Mental arithmetic and the four operations', 'Long multiplication and division', 'Factors, multiples, primes, squares and cubes', 'Fractions', 'Decimals and percentages', 'Ratio and proportion', 'Number sequences and simple algebra', 'Measures, time and money', 'Perimeter, area and volume', 'Angles, 2D and 3D shapes', 'Coordinates, reflection and translation', 'Charts, tables and averages', 'Probability language', 'Multi-step word problems', 'Timed mixed papers'];
+  const EN11 = ['Comprehension: finding information', 'Comprehension: inference and deduction', 'Comprehension: language and the writer\'s choices', 'Vocabulary: word meanings in context', 'Spelling', 'Punctuation', 'Grammar and parts of speech', 'Cloze passages (missing words)', 'Sentence completion and shuffled sentences', 'Creative writing: stories and descriptions', 'Non-fiction writing', 'Timed mixed papers'];
+  const VR11 = ['Hidden words', 'Missing letters and move a letter', 'Letter sequences and alphabet positions', 'Letter codes and word codes', 'Number codes for words', 'Compound words', 'Synonyms (closest meaning)', 'Antonyms (opposite meaning)', 'Odd ones out', 'Word analogies', 'Number series', 'Letter-for-number sums and missing numbers', 'Word grids and anagrams', 'Logic and deduction problems', 'Timed mixed papers'];
+  const NVR11 = ['Odd one out', 'Find the similarity', 'Analogies (shape pairs)', 'Series and sequences', 'Matrices (complete the grid)', 'Shape codes', 'Reflection and rotation', 'Hidden shapes and combining shapes', 'Cubes and nets', '3D views and spatial reasoning', 'Timed mixed papers'];
+  const SUB11 = [['Maths', 'MA', MA11], ['English', 'EN', EN11], ['Verbal reasoning', 'VR', VR11], ['Non-verbal reasoning', 'NVR', NVR11]];
+  const ELEVEN = Object.entries(E11).flatMap(([k, name]) => SUB11.map(([sub, key, topics]) => ({ track: 'elevenplus', board: name, qual: '11+', subject: sub, code: '', key: `${k}-${key}`, topics })));
+  SPECS.forEach((s) => { s.track = 'gcse'; s.key = s.code; });
+  SPECS.push(...ELEVEN);
+  const SUBJECTS_11 = SUB11.map((x) => x[0]);
+  const BOARDS_11 = Object.values(E11);
+  const TRACKS = { gcse: 'GCSE', elevenplus: '11+' };
+
   const BOARDS = Object.values(B);
   const QUALS = ['GCSE', 'International GCSE', 'IGCSE', 'A level'];
 
@@ -52,6 +67,13 @@
       out.push({ label: `May/June ${y}`, date: `${y}-05-15`, last: `${y}-06-20` });
       out.push({ label: `November ${y} (Maths and English resits)`, date: `${y}-11-05`, last: `${y}-11-20` });
     }
+    return out.filter((s) => s.date > fromIso);
+  }
+  // 11+ tests: early to mid September at the start of Year 6.
+  function examSeries11(fromIso) {
+    const y0 = new Date(fromIso + 'T12:00:00').getFullYear();
+    const out = [];
+    for (let y = y0; y <= y0 + 4; y++) out.push({ label: `September ${y} (start of Year 6)`, date: `${y}-09-10`, last: `${y}-09-30` });
     return out.filter((s) => s.date > fromIso);
   }
 
@@ -104,5 +126,5 @@
     return weeks;
   }
 
-  window.CATALOGUE = { BOARDS, QUALS, SPECS, examSeries, topicsFor, buildPlan };
+  window.CATALOGUE = { BOARDS, BOARDS_11, QUALS, SPECS, SUBJECTS_11, TRACKS, examSeries, examSeries11, topicsFor, buildPlan };
 })();

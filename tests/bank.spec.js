@@ -1,11 +1,12 @@
 const { test, expect, signIn, signOut, go, noSideScroll } = require('./helpers');
 
-test('question bank lists my papers, shared papers and the library, under More', async ({ page }) => {
+test('question bank lists my papers, shared papers and the Ninegrade bank, under More', async ({ page }) => {
   await signIn(page, 'usman');
   await expect(page.locator('.nav a[href="#bank"]')).toHaveCount(1);
   await go(page, '#bank');
   await expect(page.locator('.panel', { hasText: 'My papers' })).toContainText('Physics Paper A.1');
-  await expect(page.locator('.panel', { hasText: 'Ninegrade library' })).toContainText('Percentages starter');
+  await expect(page.locator('.panel', { hasText: 'Ninegrade GCSE bank' })).toContainText('Percentages starter');
+  await expect(page.locator('.panel', { hasText: 'Ninegrade 11+ bank' })).toContainText('Synonyms and antonyms');
   await page.fill('#bj-code', 'nope');
   await page.click('#bjoin button');
   await expect(page.locator('#bj-msg')).toContainText("doesn't match");

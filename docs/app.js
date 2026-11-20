@@ -1,4 +1,4 @@
-/* Ninegrade GCSE Plan (v2): landing page, invite-only sign-up, four roles, course plans. */
+/* Ninegrade (v2): landing page, invite-only sign-up, four roles, GCSE and 11+ tracks, course plans. */
 (function () {
   'use strict';
   const C = window.CATALOGUE;
@@ -71,9 +71,9 @@
       async deleteCourse(id) { must(await sb.from('courses').delete().eq('id', id)); },
       async addInvite(i) { must(await sb.from('invites').insert(i)); },
       async setInviteNote(code, note) { const r = await sb.from('invites').update({ note }).eq('code', code); if (r.error) throw new Error(/permission|denied/i.test(r.error.message) ? 'Notes need a quick database update first (v2-invite-names.sql).' : r.error.message); },
-      async createChild({ full_name, username, password, parent_id }) {
+      async createChild({ full_name, username, password, parent_id, track }) {
         const code = newCode();
-        must(await sb.from('invites').insert({ code, role: 'student', parent_id, max_uses: 1, note: 'Login for ' + full_name.slice(0, 60), expires_at: new Date(Date.now() + 864e5).toISOString() }));
+        must(await sb.from('invites').insert({ code, role: 'student', parent_id, max_uses: 1, tracks: [track || 'gcse'], note: 'Login for ' + full_name.slice(0, 60), expires_at: new Date(Date.now() + 864e5).toISOString() }));
         // A separate client, so creating the child doesn't sign the parent out.
         const tmp = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'gcse-child-signup' } });
         const { error } = await tmp.auth.signUp({ email: childEmail(username), password, options: { data: { v2: true, full_name, invite_code: code } } });
@@ -89,6 +89,11 @@
       async deleteRequest(id) { must(await sb.from('invite_requests').delete().eq('id', id)); },
       async sendFeedback(f) { const { error } = await sb.from('feedback').insert(f); if (error) throw new Error(/a lot of reports|sign in/.test(error.message) ? error.message : /does not exist|schema cache/.test(error.message) ? 'Reports are not switched on yet. Please try again later.' : error.message); },
       async setFeedback(id, status) { must(await sb.from('feedback').update({ status }).eq('id', id)); },
+      async accessList() { return must(await sb.rpc('v2_access_list')); },
+      async setAccess(pid, track, on) { return must(await sb.rpc('v2_set_access', { pid, track, turn_on: on })); },
+      async setBankManager(pid, on) { return must(await sb.rpc('v2_set_bank_manager', { pid, turn_on: on })); },
+      async setChildTrack(child, track) { return must(await sb.rpc('v2_set_child_track', { child, track })); },
+      async adminLog() { const r = await sb.from('ng_admin_log').select('*').order('created_at', { ascending: false }).limit(40); return r.error ? [] : r.data; },
     };
   }
 
@@ -96,21 +101,23 @@
   function demoApi() {
     const KEY = 'gcse-v2-demo';
     const seed = () => {
-      const P = (id, full_name, role, extra) => ({ id, full_name, role, is_platform_admin: false, email: id + '@example.com', ...extra });
+      const P = (id, full_name, role, extra) => ({ id, full_name, role, is_platform_admin: false, is_bank_manager: false, tracks: ['gcse'], email: id + '@example.com', ...extra });
       const school = { id: 'sch1', name: 'Oakfield Academy (example)' };
-      const plan = (code, tier, start, exam, hours) => { const s = C.SPECS.find((x) => x.code === code); return C.buildPlan({ start, exam, topics: C.topicsFor(s, tier), hoursPerWeek: hours }); };
-      const course = (id, student_id, code, tier, exam, hours) => { const s = C.SPECS.find((x) => x.code === code); return { id, student_id, board: s.board, qualification: s.qual, subject: s.subject, code, tier: tier || '', exam_date: exam, start_date: '2026-11-18', hours_per_week: hours, plan: plan(code, tier, '2026-11-18', exam, hours), created_at: '2026-11-17T20:00:00Z' }; };
+      const plan = (code, tier, start, exam, hours) => { const s = C.SPECS.find((x) => x.key === code); return C.buildPlan({ start, exam, topics: C.topicsFor(s, tier), hoursPerWeek: hours }); };
+      const course = (id, student_id, code, tier, exam, hours) => { const s = C.SPECS.find((x) => x.key === code); return { id, student_id, board: s.board, qualification: s.qual, subject: s.subject, code: s.code, tier: tier || '', exam_date: exam, start_date: '2026-11-18', hours_per_week: hours, plan: plan(code, tier, '2026-11-18', exam, hours), created_at: '2026-11-17T20:00:00Z' }; };
       return {
-        people: [P('usman', 'Usman', 'parent', { is_platform_admin: true }), P('hadi', 'Hadi', 'student'), P('head', 'Mrs Okafor', 'school_admin'),
-          P('teacher', 'Mr Patel', 'teacher'), P('amira', 'Amira Khan', 'student'), P('leo', 'Leo Brown', 'student'), P('sam', 'Sam Taylor', 'student')],
+        people: [P('usman', 'Usman', 'parent', { is_platform_admin: true, tracks: ['gcse', 'elevenplus'] }), P('hadi', 'Hadi', 'student'), P('head', 'Mrs Okafor', 'school_admin'),
+          P('teacher', 'Mr Patel', 'teacher', { is_bank_manager: true, tracks: ['gcse', 'elevenplus'] }), P('amira', 'Amira Khan', 'student'), P('leo', 'Leo Brown', 'student'), P('sam', 'Sam Taylor', 'student'),
+          P('priya', 'Priya Shah', 'parent', { tracks: ['elevenplus'] }), P('zara', 'Zara Shah', 'student', { tracks: ['elevenplus'] })],
         schools: [school],
         members: [{ school_id: 'sch1', person_id: 'head', role: 'admin' }, { school_id: 'sch1', person_id: 'teacher', role: 'teacher' }],
         classes: [{ id: 'cls1', school_id: 'sch1', teacher_id: 'teacher', name: '10X Maths' }],
         classStudents: [{ class_id: 'cls1', student_id: 'amira' }, { class_id: 'cls1', student_id: 'leo' }],
-        guardianships: [{ parent_id: 'usman', student_id: 'hadi' }],
+        guardianships: [{ parent_id: 'usman', student_id: 'hadi' }, { parent_id: 'priya', student_id: 'zara' }],
         courses: [course('c1', 'hadi', '1MA1', 'Foundation', '2028-05-15', 1), course('c2', 'hadi', '1EN2', '', '2028-05-15', 3),
           course('c3', 'hadi', '1PH0', 'Foundation', '2028-05-15', 1), course('c4', 'hadi', '1CH0', 'Foundation', '2028-05-15', 1),
-          course('c5', 'amira', '8300', 'Higher', '2027-05-15', 2), course('c6', 'leo', '8300', 'Foundation', '2027-05-15', 2), course('c7', 'sam', '8463', 'Higher', '2028-05-15', 2)],
+          course('c5', 'amira', '8300', 'Higher', '2027-05-15', 2), course('c6', 'leo', '8300', 'Foundation', '2027-05-15', 2), course('c7', 'sam', '8463', 'Higher', '2028-05-15', 2),
+          course('c8', 'zara', 'kent-MA', '', '2027-09-10', 1.5), course('c9', 'zara', 'kent-VR', '', '2027-09-10', 1)],
         requests: [{ id: 'rq1', full_name: 'Jo Example', email: 'jo@example.com', role: 'parent', note: 'Home-educating two children, GCSE in 2028.', status: 'new', created_at: '2026-11-18T09:00:00Z' }],
         invites: [{ code: 'TRYPARENT', role: 'parent', note: 'Example code', max_uses: 50, uses: 0, created_by: 'usman', expires_at: '2027-12-31T00:00:00Z', created_at: '2026-11-17T20:00:00Z' },
           { code: 'TRYSCHOOL', role: 'school_admin', note: 'Example code', max_uses: 50, uses: 0, created_by: 'usman', expires_at: '2027-12-31T00:00:00Z', created_at: '2026-11-17T20:00:00Z' }],
@@ -118,6 +125,8 @@
     };
     let S = store.get(KEY) || seed();
     const save = () => store.set(KEY, S);
+    const dTracks = (p) => (p.is_platform_admin ? ['elevenplus', 'gcse'] : (p.tracks && p.tracks.length ? p.tracks : ['gcse']));
+    const dLog = (pid, action) => { S.log = S.log || []; S.log.unshift({ id: uid(), created_at: new Date().toISOString(), done_by: meId, person_id: pid, action, note: '' }); };
     let meId = store.get(KEY + '-me');
     const me = () => S.people.find((p) => p.id === meId) || null;
     const schoolsOf = (sid) => S.classStudents.filter((x) => x.student_id === sid).map((x) => (S.classes.find((c) => c.id === x.class_id) || {}).school_id).filter(Boolean);
@@ -132,7 +141,7 @@
     return {
       demo: true,
       reset() { S = seed(); save(); },
-      accounts: () => S.people.filter((p) => ['usman', 'hadi', 'head', 'teacher', 'sam'].includes(p.id) || childUser(p.email)),
+      accounts: () => S.people.filter((p) => ['usman', 'hadi', 'head', 'teacher', 'sam', 'priya'].includes(p.id) || childUser(p.email)),
       async me() { return me(); },
       async signIn(id) { meId = id; store.set(KEY + '-me', id); },
       async signUp({ email, full_name, invite_code, school_name }) {
@@ -140,7 +149,7 @@
         if (!inv || inv.uses >= inv.max_uses) throw new Error('That invite code is not valid or has already been used.');
         inv.uses++;
         const id = uid(); inv.used_by = [...(inv.used_by || []), id];
-        S.people.push({ id, full_name, role: inv.role, is_platform_admin: false, email });
+        S.people.push({ id, full_name, role: inv.role, is_platform_admin: false, is_bank_manager: false, tracks: inv.role === 'student' ? [(inv.tracks || ['gcse'])[0]] : (inv.tracks || ['gcse']), email });
         if (inv.role === 'school_admin') { const sid = uid(); S.schools.push({ id: sid, name: school_name || 'My school' }); S.members.push({ school_id: sid, person_id: id, role: 'admin' }); }
         if (inv.role === 'teacher' && inv.school_id) S.members.push({ school_id: inv.school_id, person_id: id, role: 'teacher' });
         if (inv.role === 'student' && inv.parent_id) S.guardianships.push({ parent_id: inv.parent_id, student_id: id });
@@ -180,13 +189,29 @@
       async updateCourse(id, patch) { const c = S.courses.find((x) => x.id === id); if (!c || !canManage(c.student_id)) throw new Error('You can only change courses for your own students.'); Object.assign(c, patch); save(); },
       async addCourse(c) { if (!canManage(c.student_id)) throw new Error('You can only plan courses for your own students.'); S.courses.push({ ...c, id: uid(), created_at: new Date().toISOString() }); save(); },
       async deleteCourse(id) { S.courses = S.courses.filter((c) => c.id !== id); save(); },
-      async createChild({ full_name, username, parent_id }) {
+      async createChild({ full_name, username, parent_id, track }) {
         if (S.people.some((p) => p.email === childEmail(username))) throw new Error('That username is taken. Try another one.');
-        const id = uid(); S.people.push({ id, full_name, role: 'student', is_platform_admin: false, email: childEmail(username) }); S.guardianships.push({ parent_id, student_id: id }); save();
+        if (!dTracks(me()).includes(track || 'gcse')) throw new Error("That track isn't switched on for your account.");
+        const id = uid(); S.people.push({ id, full_name, role: 'student', is_platform_admin: false, tracks: [track || 'gcse'], email: childEmail(username) }); S.guardianships.push({ parent_id, student_id: id }); save();
       },
+      async accessList() { const m = me(); if (!m.is_platform_admin && !m.is_bank_manager) throw new Error('Only the site owner and bank managers can see this.');
+        return S.people.filter((p) => p.role !== 'student').map((p) => ({ ...p, tracks: dTracks(p), children: S.guardianships.filter((g) => g.parent_id === p.id).length })).sort((a, b) => (b.is_platform_admin - a.is_platform_admin) || a.full_name.localeCompare(b.full_name)); },
+      async setAccess(pid, track, on) { const m = me(); const p = S.people.find((x) => x.id === pid);
+        if (!m.is_platform_admin && !m.is_bank_manager) throw new Error('Only the site owner and bank managers can change access.');
+        if (track === 'gcse' && !m.is_platform_admin) throw new Error('Only the site owner can change GCSE access.');
+        if (!p || p.role === 'student' || p.is_platform_admin) throw new Error('Not allowed.');
+        const nt = on ? [...new Set([...dTracks(p), track])].sort() : dTracks(p).filter((t) => t !== track);
+        if (!nt.length) throw new Error('Leave at least one of GCSE or 11+ switched on.');
+        p.tracks = nt; dLog(pid, `${track === 'gcse' ? 'GCSE' : '11+'} access ${on ? 'on' : 'off'}`); save(); return nt; },
+      async setBankManager(pid, on) { if (!me().is_platform_admin) throw new Error('Only the site owner can choose bank managers.'); const p = S.people.find((x) => x.id === pid);
+        p.is_bank_manager = on; if (on) p.tracks = [...new Set([...dTracks(p), 'elevenplus'])].sort(); dLog(pid, on ? 'Made bank manager' : 'No longer bank manager'); save(); return on; },
+      async setChildTrack(child, track) { if (!canManage(child) || !dTracks(me()).includes(track)) throw new Error('Not allowed.'); S.people.find((x) => x.id === child).tracks = [track]; save(); return track; },
+      async adminLog() { return (S.log || []).slice(0, 40); },
       async setChildPassword() { },
       async setInviteNote(code, note) { S.invites.forEach((x) => { if (x.code === code) x.note = note; }); save(); },
-      async addInvite(i) { S.invites.unshift({ ...i, uses: 0, created_by: meId, created_at: new Date().toISOString() }); save(); },
+      async addInvite(i) { const m = me(); const t = i.tracks || ['gcse'];
+        if (!m.is_platform_admin && !(m.is_bank_manager && i.role === 'parent' && t.join() === 'elevenplus') && !t.every((x) => dTracks(m).includes(x))) throw new Error("That track isn't switched on for your account.");
+        S.invites.unshift({ ...i, tracks: t, uses: 0, created_by: meId, created_at: new Date().toISOString() }); save(); },
       async deleteInvite(code) { S.invites = S.invites.filter((i) => i.code !== code); save(); },
       async addClass(c) { S.classes.push({ ...c, id: uid() }); save(); },
       async requestInvite(r) { S.requests = S.requests || []; if (S.requests.some((x) => x.email === r.email.toLowerCase())) throw new Error('We already have a request from this email. We\'ll be in touch soon.'); S.requests.unshift({ ...r, email: r.email.toLowerCase(), id: uid(), status: 'new', created_at: new Date().toISOString() }); save(); },
@@ -230,8 +255,9 @@
     };
   });
   const study = window.createStudy({ awayDays: (sid) => api.awayDays(sid), who: (r) => (!me ? null : r === 'student' ? me.id : (childrenOf(me.id)[0] || {}).id), sb: api.sb, demo: api.demo, getMeId: () => me && me.id, shell: (...a) => shell(...a), page: (...a) => page(...a), esc, today, app, report });
-  const practice = window.createPractice({ sb: api.sb, demo: api.demo, esc, fmt, today, app, shell: (...a) => shell(...a), page: (...a) => page(...a), me: () => me, D: () => D, person: (id) => person(id), managedBy: (sid) => managedBy(sid), setByNote: (sid) => setByNote(sid), bankPapers: () => bank.papers() });
-  const bank = window.createBank({ sb: api.sb, demo: api.demo, esc, today, app, shell: (...a) => shell(...a), page: (...a) => page(...a), me: () => me, D: () => D, person: (id) => person(id), practice });
+  const practice = window.createPractice({ sb: api.sb, demo: api.demo, esc, fmt, today, app, shell: (...a) => shell(...a), page: (...a) => page(...a), me: () => me, D: () => D, person: (id) => person(id), managedBy: (sid) => managedBy(sid), setByNote: (sid) => setByNote(sid), bankPapers: (sid) => bank.papers().then((ps) => ps.filter((x) => (x.track || 'gcse') === (sid ? childTrack(sid) : (x.track || 'gcse')) && !(x.collection === 'ninegrade' && x.review))) });
+  const trackCtx = { myTracks: () => myTracks(), hasTrack: (t) => hasTrack(t), childTrack: (sid) => childTrack(sid), isStaff: () => isStaff() };
+  const bank = window.createBank({ sb: api.sb, demo: api.demo, esc, today, app, shell: (...a) => shell(...a), page: (...a) => page(...a), me: () => me, D: () => D, person: (id) => person(id), practice, ...trackCtx, refresh: () => render() });
 
   // Derived lookups over the loaded data.
   const person = (id) => D.people.find((p) => p.id === id) || { id, full_name: 'Someone', role: 'student' };
@@ -239,6 +265,14 @@
   const childrenOf = (pid) => D.guardianships.filter((g) => g.parent_id === pid).map((g) => person(g.student_id));
   const classStudents = (cid) => D.classStudents.filter((x) => x.class_id === cid).map((x) => person(x.student_id));
   const mySchool = () => { const m = D.members.find((x) => x.person_id === me.id); return m ? { ...D.schools.find((s) => s.id === m.school_id), myRole: m.role } : null; };
+  // Tracks: GCSE and/or 11+ for parents and teachers (switched by the owner or a bank manager); one per child.
+  const tracksOf = (p) => (p && p.is_platform_admin ? ['gcse', 'elevenplus'] : (p && Array.isArray(p.tracks) && p.tracks.length ? p.tracks : ['gcse']));
+  const myTracks = () => tracksOf(me);
+  const hasTrack = (t) => myTracks().includes(t);
+  const childTrack = (sid) => tracksOf(person(sid))[0] || 'gcse';
+  const isStaff = () => !!(me && (me.is_platform_admin || me.is_bank_manager));
+  const TR = C.TRACKS;
+  const brandSub = () => (!me || !me.role ? 'GCSE · 11+' : hasTrack('gcse') && hasTrack('elevenplus') ? 'GCSE · 11+' : hasTrack('elevenplus') ? '11+' : 'GCSE');
   const thisWeek = (c) => { const t = today(); const p = c.plan || []; return p.filter((w) => w.start <= t).pop() || p[0]; };
 
   // ---------- shell ----------
@@ -246,8 +280,9 @@
     if (!me || !me.role) return [];
     const n = [['home', 'Dashboard'], ...study.nav(), ...practice.nav(), ...bank.nav()];
     if (me.is_platform_admin || ['school_admin', 'teacher', 'parent'].includes(me.role)) n.push(['invites', 'Invite codes']);
-    n.push(['boards', 'Exam boards']);
+    if (hasTrack('gcse')) n.push(['boards', 'Exam boards']);
     if (me.is_platform_admin) { const nf = D && D.feedback ? D.feedback.filter((f) => f.status === 'new').length : 0; n.push(['everyone', 'Everyone'], ['feedback', `Feedback${nf ? ` <span class="count">${nf}</span>` : ''}`]); }
+    else if (me.is_bank_manager) n.push(['everyone', '11+ access']);
     return n;
   }
   function shell(route, inner, opts = {}) {
@@ -260,13 +295,13 @@
     const navHtml = `${main.map(([r, t]) => `<a href="#${r}" ${route === r ? 'aria-current="page"' : ''}>${t}</a>`).join('')}${more.length ? `<details class="nav-more"><summary ${more.some(([r]) => r === route) ? 'aria-current="page"' : ''}>More${moreBadge}<span class="caret" aria-hidden="true">▾</span></summary><div class="more-menu" role="menu">${more.map(([r, t]) => `<a role="menuitem" href="#${r}" ${route === r ? 'aria-current="page"' : ''}>${t}</a>`).join('')}</div></details>` : ''}`;
     app.innerHTML = `
       <header class="bar ${opts.dark ? 'bar-dark' : ''}"><div class="bar-in">
-        <a class="logo" href="#${me ? 'home' : ''}"><span class="logo-mark" aria-hidden="true">9</span><span class="logo-words">Ninegrade<small>GCSE Plan</small></span></a>
+        <a class="logo" href="#${me ? 'home' : ''}"><span class="logo-mark" aria-hidden="true">9</span><span class="logo-words">Ninegrade<small>${brandSub()}</small></span></a>
         ${nav.length ? `<nav class="nav" aria-label="Main">${navHtml}</nav>` : '<span class="grow"></span>'}
         ${me ? `<div class="me"><a class="me-link" href="#account" title="My account" ${route === 'account' ? 'aria-current="page"' : ''}><span class="avatar" aria-hidden="true">${esc(initials(me.full_name))}</span><span class="me-name">${esc(me.full_name)}<small>${me.is_platform_admin && D && !childrenOf(me.id).length ? 'Owner' : `${me.role ? ROLE[me.role] : ''}${me.is_platform_admin ? ' · owner' : ''}`}${api.demo ? ' · preview' : ''}</small></span></a><button class="btn ghost sm" id="signout">Sign out</button></div>`
           : `<div class="me"><a class="btn ghost sm" href="#signin">Sign in</a><a class="btn accent sm" href="#signup">Get started</a></div>`}
       </div></header>
       ${inner}
-      <footer class="foot"><div class="foot-in"><span>Ninegrade GCSE Plan · invite-only beta</span><span>Plans follow the exam boards' published specifications. Always check dates with your exam centre.</span></div></footer>`;
+      <footer class="foot"><div class="foot-in"><span>Ninegrade · invite-only beta · <a href="#sharing-terms">Sharing and contributions</a></span><span>Plans follow the exam boards' and test providers' published guidance. Always check dates with your exam centre or school.</span></div></footer>`;
     fitNav(); if (document.fonts && document.fonts.status !== 'loaded') document.fonts.ready.then(fitNav);
     if (!window.ngMoreWired) { window.ngMoreWired = true; const cur = () => app.querySelector('.nav-more[open]');
       document.addEventListener('click', (e) => { const d = cur(); if (d && !d.contains(e.target)) d.open = false; });
@@ -343,9 +378,9 @@
     shell('', `
       <section class="hero"><div class="hero-in">
         <div class="hero-copy">
-          <p class="kicker">GCSE and IGCSE study, planned week by week</p>
+          <p class="kicker">GCSE and 11+ study, planned week by week</p>
           <h1>A clear plan from today to the exam hall.</h1>
-          <p class="lede">Pick the exam board, subject and specification code. Ninegrade builds a week-by-week plan to the exam, then turns each week into short lessons, self-marking quizzes and marked practice.</p>
+          <p class="lede">Pick the exam board and subject, or the 11+ test. Ninegrade builds a week-by-week plan to the exam, then turns each week into short lessons, self-marking quizzes and marked practice.</p>
           <div class="cta"><a class="btn accent lg" href="#signup">Get started</a><a class="btn outline-light lg" href="#signin">Sign in</a></div>
           <p class="fine">Invite-only beta. No code yet? <a class="light-link" href="#request">Request an invite</a> · <a class="light-link" href="#boards">Not sure of your exam board?</a></p>
         </div>
@@ -356,9 +391,12 @@
         </div>
       </div></section>
       ${page(`
-      <div class="trust-strip"><span><b>5</b> exam boards</span><span><b>${C.SPECS.length}</b> ready-made specifications</span><span><b>GCSE</b> and International GCSE</span><span><b>&lt; 1 min</b> to build a plan</span></div>
+      <div class="trust-strip"><span><b>5</b> exam boards</span><span><b>${C.SPECS.filter((x) => x.track === 'gcse').length}</b> GCSE specifications</span><span><b>11+</b> Kent, GL, CSSE and ISEB</span><span><b>&lt; 1 min</b> to build a plan</span></div>
+      <section class="band tracks-band"><h2 class="section-title">Two tracks, one place</h2><div class="roles tracks">
+        <article class="role role-teacher"><h3>GCSE</h3><p>Edexcel, AQA, OCR, Eduqas and Cambridge. Maths, English, the sciences and more, Foundation or Higher, planned to the exam series.</p></article>
+        <article class="role role-parent"><h3>11+</h3><p>Maths, English, verbal reasoning and non-verbal reasoning for the Kent Test, GL Assessment, CSSE and ISEB, planned to the September test date in Year 6.</p></article></div></section>
       <section class="band">
-        <h2 class="section-title">Everything a GCSE year needs, in one place</h2>
+        <h2 class="section-title">Everything a study year needs, in one place</h2>
         ${illoDashboard()}
         <div class="showcase">
           <article class="show show-blue"><p class="show-k">Build your plan</p><p class="show-t">Pick the board and specification for each subject, and Ninegrade builds a week-by-week plan to the exam.</p>${illoSubjects()}</article>
@@ -381,7 +419,7 @@
         <h2 class="section-title">How it works</h2>
         <ol class="steps">
           <li><b>Join with an invite code</b><span>Choose School, Teacher, Parent or Student.</span></li>
-          <li><b>Create a course plan</b><span>Answer five questions: board, qualification, subject, specification code and exam date.</span></li>
+          <li><b>Create a course plan</b><span>Choose the exam board and subject, or the 11+ test, and the exam date.</span></li>
           <li><b>Work through it weekly</b><span>Short lessons, quizzes and marked practice, adjusted to what was hard last week.</span></li>
         </ol>
         <div class="cta center"><a class="btn primary lg" href="#signup">Create an account</a></div>
@@ -460,7 +498,7 @@
   function illoDashboard() {
     const dhRing=(p,s=54,c='#1f3a8a')=>{const r=s/2-5,C=2*Math.PI*r;return `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}"><circle cx="${s/2}" cy="${s/2}" r="${r}" fill="none" stroke="#ebe8e0" stroke-width="6"/><circle cx="${s/2}" cy="${s/2}" r="${r}" fill="none" stroke="${c}" stroke-width="6" stroke-linecap="round" stroke-dasharray="${C*p/100} ${C}" transform="rotate(-90 ${s/2} ${s/2})"/><text x="50%" y="54%" text-anchor="middle" dominant-baseline="middle" font-size="${s/4.2}" font-weight="700" fill="#141a2e" font-family="Inter">${p}%</text></svg>`};
     const dhCourse=(sub,code,p,now,c,behind)=>`<div class="dh-mc"><div class="dh-mc-top">${dhRing(p,44,c)}<b>${sub}</b></div><div class="dh-mc-meta">${code}</div>${behind?'<div class="dh-beh"><span>Behind</span>1 week to catch up</div>':''}<div class="dh-mc-now"><span>This week</span>${now}</div><div class="dh-bar"><i style="width:${p}%;background:${c}"></i></div></div>`;
-    const dhHeader=`<div class="dh-m-head"><div class="dh-m-logo"><span>9</span><div>Ninegrade<small>GCSE PLAN</small></div></div><div class="dh-m-nav"><i class="dh-on">Dashboard</i><i>Marking <em>2</em></i><i>Lessons</i><i>Weak topics</i></div><div class="dh-m-me"><span>SM</span>Sarah M<small>Parent</small></div></div>`;
+    const dhHeader=`<div class="dh-m-head"><div class="dh-m-logo"><span>9</span><div>Ninegrade<small>GCSE · 11+</small></div></div><div class="dh-m-nav"><i class="dh-on">Dashboard</i><i>Marking <em>2</em></i><i>Lessons</i><i>Weak topics</i></div><div class="dh-m-me"><span>SM</span>Sarah M<small>Parent</small></div></div>`;
     const dhDash=(o={})=>`<div class="dh-mock">${dhHeader}<div class="dh-m-body"><p class="dh-m-k">MONDAY 12 OCTOBER</p><h3 class="dh-m-h">Good morning, Sarah</h3>
     <div class="dh-m-child"><div class="dh-m-ch"><span>A</span><div><b>Alex</b><small>4 courses</small></div><div class="dh-m-btns"><i>Weekly timetable</i><i class="dh-p">Add a course</i></div></div>
     <div class="dh-m-stats"><div class="dh-hl"><small>Work to mark</small><b>2</b></div><div class="dh-hl"><small>Weeks to approve</small><b>1</b></div><div><small>Marked work</small><b>84%</b><small>12 pieces</small></div><div><small>Memory quizzes</small><b>91%</b><small>23 done</small></div></div>
@@ -559,7 +597,7 @@
     const c = D.courses.find((x) => x.id === id);
     if (!c) return shell('home', page('<section class="panel"><h1>Course not found</h1><p><a href="#home">Back to your dashboard</a></p></section>'));
     if (!canEditPlan(c.student_id)) return shell('home', page(`<div class="narrow"><div class="page-head"><a class="small" href="#course-${esc(c.id)}">← Back to the plan</a><h1>${esc(c.subject)}</h1></div>${setByNote(c.student_id)}</div>`));
-    const spec = C.SPECS.find((s) => s.code === c.code && s.board === c.board);
+    const spec = C.SPECS.find((s) => s.board === c.board && s.code === c.code && (s.code || s.subject === c.subject));
     let plan = JSON.parse(JSON.stringify(c.plan || []));
     const KINDS = { teach: 'Teaching', review: 'Review', revision: 'Revision', break: 'Break' };
     const draw = (msg) => {
@@ -684,26 +722,30 @@
   function wizard(studentId, st) {
     st = st || { step: 1 };
     const student = person(studentId);
-    const specs = C.SPECS.filter((s) => (!st.board || s.board === st.board) && (!st.qual || s.qual === st.qual));
-    const spec = C.SPECS.find((s) => s.code === st.code && s.board === st.board);
-    const series = C.examSeries(today());
-    const steps = ['Exam board', 'Qualification', 'Subject and code', 'Exam date', 'Check and create'];
-    const quals = [...new Set(C.SPECS.filter((s) => s.board === st.board).map((s) => s.qual))];
+    // An 11+ child gets the 11+ tests and subjects; everyone else the GCSE boards.
+    const t11 = childTrack(studentId) === 'elevenplus';
+    const pool = C.SPECS.filter((s) => s.track === (t11 ? 'elevenplus' : 'gcse'));
+    const specs = pool.filter((s) => (!st.board || s.board === st.board) && (!st.qual || s.qual === st.qual));
+    const spec = pool.find((s) => s.key === st.key && s.board === st.board);
+    const series = t11 ? C.examSeries11(today()) : C.examSeries(today());
+    const steps = t11 ? ['11+ test', '', 'Subject', 'Test date', 'Check and create'] : ['Exam board', 'Qualification', 'Subject and code', 'Exam date', 'Check and create'];
+    const quals = [...new Set(pool.filter((s) => s.board === st.board).map((s) => s.qual))];
     let body = '';
-    if (st.step === 1) body = `<h2>Which exam board?</h2><p class="small muted">Not sure? <a href="#boards">How to find your exam board</a></p><div class="opt-grid">${C.BOARDS.map((b) => `<button class="opt" data-k="board" data-v="${esc(b)}">${esc(b)}</button>`).join('')}</div>`;
+    if (st.step === 1) body = t11 ? `<h2>Which 11+ test?</h2><p class="small muted">The Kent Test is for Kent grammar schools. Most other grammar schools use GL Assessment papers, Essex uses CSSE, and many independent schools use the ISEB Common Pre-Test. Check with the schools you're applying to.</p><div class="opt-grid">${C.BOARDS_11.map((b) => `<button class="opt" data-k="board" data-v="${esc(b)}">${esc(b)}</button>`).join('')}</div>`
+      : `<h2>Which exam board?</h2><p class="small muted">Not sure? <a href="#boards">How to find your exam board</a></p><div class="opt-grid">${C.BOARDS.map((b) => `<button class="opt" data-k="board" data-v="${esc(b)}">${esc(b)}</button>`).join('')}</div>`;
     if (st.step === 2) body = `<h2>Which qualification?</h2><div class="opt-grid">${(quals.length ? quals : C.QUALS).map((q) => `<button class="opt" data-k="qual" data-v="${esc(q)}">${esc(q)}</button>`).join('')}</div>`;
     if (st.step === 3) body = `<h2>Which subject?</h2>
-      <div class="opt-grid">${specs.map((s) => `<button class="opt" data-k="code" data-v="${esc(s.code)}"><b>${esc(s.subject)}</b><small>${esc(s.code)}</small></button>`).join('')}</div>
+      <div class="opt-grid">${specs.map((s) => `<button class="opt" data-k="code" data-v="${esc(s.key)}"><b>${esc(s.subject)}</b>${s.code ? `<small>${esc(s.code)}</small>` : ''}</button>`).join('')}</div>
       <details class="other"><summary>My subject isn't listed</summary><form id="other" class="form">
         <label for="osub">Subject name<input id="osub" required maxlength="60"></label>
-        <label for="ocode">Specification code <small>on the board's website, e.g. 1MA1 or 8300</small><input id="ocode" maxlength="12"></label>
+        ${t11 ? '' : '<label for="ocode">Specification code <small>on the board\'s website, e.g. 1MA1 or 8300</small><input id="ocode" maxlength="12"></label>'}
         <label for="otopics">Topics, one per line (optional, you can add them later)<textarea id="otopics" rows="5"></textarea></label>
         <button class="btn primary">Continue</button></form></details>`;
-    if (st.step === 4) body = `<h2>When is the exam?</h2>
+    if (st.step === 4) body = `<h2>When is the ${t11 ? 'test' : 'exam'}?</h2>
       ${spec && spec.tiers ? `<fieldset class="tiers"><legend>Tier</legend>${spec.tiers.map((t) => `<label class="radio"><input type="radio" name="tier" value="${esc(t)}" ${st.tier === t ? 'checked' : ''}> ${esc(t)}</label>`).join('')}</fieldset>` : ''}
       <form id="when" class="form">
-        <label for="series">Exam series<select id="series">${series.map((s) => `<option value="${s.date}" ${st.exam === s.date ? 'selected' : ''}>${esc(s.label)}</option>`).join('')}<option value="custom" ${st.exam && !series.some((s) => s.date === st.exam) ? 'selected' : ''}>Another date</option></select></label>
-        <label for="exam">First exam date <small>use the board's timetable when it's published</small><input id="exam" type="date" value="${st.exam || series[2].date}" required></label>
+        <label for="series">${t11 ? 'Test' : 'Exam series'}<select id="series">${series.map((s) => `<option value="${s.date}" ${st.exam === s.date ? 'selected' : ''}>${esc(s.label)}</option>`).join('')}<option value="custom" ${st.exam && !series.some((s) => s.date === st.exam) ? 'selected' : ''}>Another date</option></select></label>
+        <label for="exam">${t11 ? 'Test date <small>check the exact date with the council or school</small>' : 'First exam date <small>use the board\'s timetable when it\'s published</small>'}<input id="exam" type="date" value="${st.exam || (series[t11 ? 0 : 2] || series[0]).date}" required></label>
         <label for="start">Start studying on<input id="start" type="date" value="${st.start || today()}" required></label>
         <label for="hours">Study time per week (hours)<input id="hours" type="number" min="0.5" max="20" step="0.5" value="${st.hours || 2}" required></label>
         <button class="btn primary">Continue</button></form>`;
@@ -719,21 +761,21 @@
         <div id="err"></div><button class="btn accent lg" id="create">Create course plan</button>`;
     }
     shell('home', page(`<div class="wizard">
-      <div class="page-head"><a class="small" href="#home">← Cancel</a><p class="kicker dark">New course plan${student.id !== me.id ? ' for ' + esc(student.full_name) : ''}</p><h1>Create a course plan</h1></div>
-      <ol class="stepper">${steps.map((s, i) => `<li class="${i + 1 < st.step ? 'done' : i + 1 === st.step ? 'on' : ''}"><button ${i + 1 < st.step ? '' : 'disabled'} data-step="${i + 1}"><span>${i + 1}</span>${s}</button></li>`).join('')}</ol>
+      <div class="page-head"><a class="small" href="#home">← Cancel</a><p class="kicker dark">New ${t11 ? '11+ ' : ''}course plan${student.id !== me.id ? ' for ' + esc(student.full_name) : ''}</p><h1>Create a course plan</h1></div>
+      <ol class="stepper">${steps.map((s, i) => [s, i]).filter(([s]) => s).map(([s, i], j) => `<li class="${i + 1 < st.step ? 'done' : i + 1 === st.step ? 'on' : ''}"><button ${i + 1 < st.step ? '' : 'disabled'} data-step="${i + 1}"><span>${j + 1}</span>${s}</button></li>`).join('')}</ol>
       <section class="panel">${body}</section></div>`));
     const go = (patch) => wizard(studentId, { ...st, ...patch });
     app.querySelectorAll('[data-step]').forEach((b) => { b.onclick = () => go({ step: Number(b.dataset.step) }); });
     app.querySelectorAll('.opt').forEach((b) => {
       b.onclick = () => {
         const k = b.dataset.k; const v = b.dataset.v;
-        if (k === 'board') go({ board: v, qual: null, code: null, step: 2 });
-        if (k === 'qual') go({ qual: v, code: null, step: 3 });
-        if (k === 'code') { const s = C.SPECS.find((x) => x.code === v); go({ code: v, subject: s.subject, tier: s.tiers ? s.tiers[0] : '', step: 4 }); }
+        if (k === 'board') go(t11 ? { board: v, qual: '11+', code: null, key: null, step: 3 } : { board: v, qual: null, code: null, key: null, step: 2 });
+        if (k === 'qual') go({ qual: v, code: null, key: null, step: 3 });
+        if (k === 'code') { const s = pool.find((x) => x.key === v && x.board === st.board); go({ key: v, code: s.code, subject: s.subject, tier: s.tiers ? s.tiers[0] : '', step: 4 }); }
       };
     });
     const other = document.getElementById('other');
-    if (other) other.onsubmit = (e) => { e.preventDefault(); go({ code: document.getElementById('ocode').value.trim().toUpperCase(), subject: document.getElementById('osub').value.trim(), topics: document.getElementById('otopics').value.split('\n').map((x) => x.trim()).filter(Boolean), custom: true, tier: '', step: 4 }); };
+    if (other) other.onsubmit = (e) => { e.preventDefault(); go({ key: null, code: ((document.getElementById('ocode') || {}).value || '').trim().toUpperCase(), subject: document.getElementById('osub').value.trim(), topics: document.getElementById('otopics').value.split('\n').map((x) => x.trim()).filter(Boolean), custom: true, tier: '', step: 4 }); };
     const when = document.getElementById('when');
     if (when) {
       const ser = document.getElementById('series'); ser.onchange = () => { if (ser.value !== 'custom') document.getElementById('exam').value = ser.value; };
@@ -767,7 +809,7 @@
     if (!list.length) return '<p class="muted small">No codes yet.</p>';
     return `<div class="scroll-x"><table class="data"><thead><tr><th>Code</th><th>For</th><th>Used</th><th>Expires</th><th></th></tr></thead><tbody>
       ${list.map((i) => `<tr><td><code class="code">${esc(i.code)}</code> <button class="btn ghost xs" data-copy="${esc(i.code)}">Copy</button></td>
-        <td>${ROLE[i.role]}${i.class_id ? ` · ${esc((D.classes.find((c) => c.id === i.class_id) || {}).name || 'class')}` : ''}${i.parent_id ? ' · linked to you' : ''}${i.school_id ? ' · your school' : ''}<br><span class="note-line" data-note-for="${esc(i.code)}">${i.note ? `<span class="small"><b>${esc(i.note)}</b></span> ` : ''}<button type="button" class="linkish small" data-edit-note="${esc(i.code)}" data-note="${esc(i.note || '')}">${i.note ? 'Edit note' : 'Add a note: who is it for?'}</button></span>${(i.used_by || []).length ? `<br><span class="small used-by">Used by ${(i.used_by || []).map((u) => esc(person(u).full_name)).join(', ')}</span>` : ''}</td>
+        <td>${ROLE[i.role]} · ${(i.tracks || ['gcse']).map((t) => TR[t]).join(' and ')}${i.class_id ? ` · ${esc((D.classes.find((c) => c.id === i.class_id) || {}).name || 'class')}` : ''}${i.parent_id ? ' · linked to you' : ''}${i.school_id ? ' · your school' : ''}<br><span class="note-line" data-note-for="${esc(i.code)}">${i.note ? `<span class="small"><b>${esc(i.note)}</b></span> ` : ''}<button type="button" class="linkish small" data-edit-note="${esc(i.code)}" data-note="${esc(i.note || '')}">${i.note ? 'Edit note' : 'Add a note: who is it for?'}</button></span>${(i.used_by || []).length ? `<br><span class="small used-by">Used by ${(i.used_by || []).map((u) => esc(person(u).full_name)).join(', ')}</span>` : ''}</td>
         <td class="num">${i.uses} / ${i.max_uses}</td><td>${fmt(i.expires_at.slice(0, 10), { day: 'numeric', month: 'short' })}</td>
         <td><button class="btn ghost xs" data-del-code="${esc(i.code)}">Delete</button></td></tr>`).join('')}</tbody></table></div>`;
   }
@@ -776,6 +818,10 @@
       b.onclick = async () => {
         b.disabled = true;
         const inv = { ...JSON.parse(b.dataset.invite), code: newCode(), expires_at: new Date(Date.now() + 30 * 864e5).toISOString() };
+        if (!inv.tracks) { const picked = [...app.querySelectorAll('input[name=inv-track]:checked')].map((x) => x.value); if (app.querySelector('input[name=inv-track]')) window.ngInvTracks = picked;
+          inv.tracks = picked.length ? picked : myTracks().length === 1 ? myTracks() : [];
+          if (!inv.tracks.length) { b.disabled = false; flash('Tick GCSE or 11+ (or both) for the code.', true); return; }
+          if (inv.role === 'student' && inv.tracks.length > 1) { b.disabled = false; flash("A child's code gives one track: tick only GCSE or only 11+.", true); return; } }
         const noteEl = document.getElementById('inv-note'); if (noteEl && noteEl.value.trim()) inv.note = noteEl.value.trim().slice(0, 80);
         try { await api.addInvite(inv); await load(); rerender(); flash(`New code: ${inv.code}. Give it to the person who will sign up.`); }
         catch (x) { b.disabled = false; flash(x.message, true); }
@@ -802,12 +848,14 @@
         + inviteBox({ title: 'Student (on their own)', desc: 'A student who plans and studies by themselves.', role: 'student' });
     }
     if (school && school.myRole === 'admin') boxes += inviteBox({ title: 'Teacher at ' + esc(school.name), desc: 'Joins your school as a teacher.', role: 'teacher', extra: { school_id: school.id } });
+    if (me.is_bank_manager && !me.is_platform_admin) boxes += inviteBox({ title: '11+ parent', desc: 'A parent who will use Ninegrade for 11+, with the Ninegrade 11+ bank.', role: 'parent', extra: { tracks: ['elevenplus'] } });
     if (me.role === 'parent' && !(me.is_platform_admin && !childrenOf(me.id).length)) boxes += inviteBox({ title: 'Your child', desc: 'Your child signs up with this code and is linked to you.', role: 'student', extra: { parent_id: me.id } });
     D.classes.filter((c) => c.teacher_id === me.id).forEach((c) => { boxes += inviteBox({ title: 'Students for ' + esc(c.name), desc: 'One code for the whole class (up to 40 students).', role: 'student', extra: { class_id: c.id }, maxUses: 40 }); });
     shell('invites', page(`
       <div class="page-head"><p class="kicker dark">Invite only</p><h1>Invite codes</h1><p class="muted">Each code works for one kind of account and expires after 30 days. Nobody can join without one.</p></div>
       <section class="panel"><h2>Make a code</h2>
         <label class="inline" for="inv-note">Note to remember who it's for (optional)<input id="inv-note" maxlength="80" placeholder="e.g. Test teacher account"></label>
+        ${myTracks().length > 1 ? `<fieldset class="track-pick"><legend>What the code gives</legend><div class="row">${myTracks().map((t) => `<label class="check-row"><input type="checkbox" name="inv-track" value="${t}" ${(window.ngInvTracks || ['gcse']).includes(t) ? 'checked' : ''}> <span>${TR[t]}</span></label>`).join('')}</div><p class="muted small">Parents and teachers can have both. A child's code gives one: the track their plans and practice follow.${me.is_bank_manager && !me.is_platform_admin ? ' The 11+ parent code always gives 11+ only.' : ''}</p></fieldset>` : ''}
         <div class="invite-grid">${boxes || '<p class="muted">Your account type can\'t invite anyone.</p>'}</div><div id="flash"></div></section>
       ${me.is_platform_admin ? requestsPanel() : ''}
       <section class="panel"><h2>Codes you've made</h2>${codeList()}</section>`));
@@ -840,7 +888,7 @@
     const cs = coursesOf(ch.id);
     const studyHere = study.role === 'admin' && ch.id === (study.studentId() || childrenOf(me.id)[0].id);
     const uname = ((D.usernames || []).find((u) => u.id === ch.id) || {}).username;
-    return `<article class="person-card"><div class="pc-head"><span class="avatar lg">${esc(initials(ch.full_name))}</span><div><h3>${esc(ch.full_name)}</h3><span class="muted small">${cs.length} course${cs.length === 1 ? '' : 's'}${uname ? ` · signs in as <b>${esc(uname)}</b> · <button type="button" class="linkish" data-reset-child="${esc(ch.id)}">Set a new password</button>` : ''}</span></div><div class="row"><a class="btn ghost sm" href="#timetable-${esc(ch.id)}">Weekly timetable</a><a class="btn ghost sm" href="#practice-${esc(ch.id)}">Practice</a><a class="btn primary sm" href="#plan-for-${esc(ch.id)}">Add a course</a></div></div><div class="reset-slot" id="reset-${esc(ch.id)}"></div>
+    return `<article class="person-card"><div class="pc-head"><span class="avatar lg">${esc(initials(ch.full_name))}</span><div><h3>${esc(ch.full_name)}</h3><span class="muted small"><span class="tagx">${TR[childTrack(ch.id)]}</span> ${myTracks().length > 1 ? `<button type="button" class="linkish" data-ctrack="${esc(ch.id)}" data-to="${childTrack(ch.id) === 'gcse' ? 'elevenplus' : 'gcse'}">Switch to ${TR[childTrack(ch.id) === 'gcse' ? 'elevenplus' : 'gcse']}</button> · ` : '· '}${cs.length} course${cs.length === 1 ? '' : 's'}${uname ? ` · signs in as <b>${esc(uname)}</b> · <button type="button" class="linkish" data-reset-child="${esc(ch.id)}">Set a new password</button>` : ''}</span></div><div class="row"><a class="btn ghost sm" href="#timetable-${esc(ch.id)}">Weekly timetable</a><a class="btn ghost sm" href="#practice-${esc(ch.id)}">Practice</a><a class="btn primary sm" href="#plan-for-${esc(ch.id)}">Add a course</a></div></div><div class="reset-slot" id="reset-${esc(ch.id)}"></div>
       ${studyHere ? study.dashBlock() : ''}${overview(cs)}
       ${cs.length ? `<div class="course-grid">${cs.map((c) => courseCard(c)).join('')}</div>` : '<p class="muted small">No courses yet.</p>'}</article>`;
   }
@@ -875,6 +923,7 @@
       <section class="panel"><h2>Create a login for your child</h2><p class="muted">No email needed. Your child signs in with a username and password that you choose here.</p>
         <form id="kid" class="form">
           <label for="k-name">Child's full name<input id="k-name" required maxlength="80" autocomplete="off"></label>
+          ${myTracks().length > 1 ? `<fieldset class="tiers"><legend>Preparing for</legend>${myTracks().map((t, i) => `<label class="radio"><input type="radio" name="k-track" value="${t}" ${i === 0 ? 'checked' : ''}> ${t === 'gcse' ? 'GCSE' : '11+ (grammar or independent school entrance)'}</label>`).join('')}</fieldset>` : ''}
           <label for="k-user">Username <small>3 to 20 lowercase letters or numbers, e.g. sami2028</small><input id="k-user" required minlength="3" maxlength="20" pattern="[a-z0-9]{3,20}" autocapitalize="none" spellcheck="false" autocomplete="off"></label>
           <label for="k-pw">Password <small>at least 8 characters</small><input id="k-pw" type="text" minlength="8" required autocomplete="off"></label>
           <div id="k-msg"></div><button class="btn primary lg" id="k-go">Create login</button></form></section>
@@ -884,7 +933,8 @@
       e.preventDefault(); const b = document.getElementById('k-go'); const msg = document.getElementById('k-msg'); b.disabled = true; b.textContent = 'Creating…'; msg.innerHTML = '';
       const full_name = document.getElementById('k-name').value.trim(); const username = u.value; const password = document.getElementById('k-pw').value;
       try { if (!/^[a-z0-9]{3,20}$/.test(username)) throw new Error('Use 3 to 20 lowercase letters or numbers for the username.');
-        await api.createChild({ full_name, username, password, parent_id: me.id }); await load();
+        const track = (app.querySelector('input[name=k-track]:checked') || {}).value || myTracks()[0];
+        await api.createChild({ full_name, username, password, parent_id: me.id, track }); await load();
         const kid = childrenOf(me.id).find((k) => k.full_name === full_name); addChildPage({ name: full_name, username, id: kid && kid.id }); }
       catch (x) { b.disabled = false; b.textContent = 'Create login'; msg.innerHTML = `<p class="msg err">${esc(x.message)}</p>`; }
     };
@@ -894,6 +944,9 @@
     shell('home', page(`${head(kids.length ? `You manage ${kids.length} ${kids.length === 1 ? 'child' : 'children'}.` : '')}
       ${kids.map(childCard).join('') || '<section class="panel"><div class="empty"><b>Add your child</b><span>Make a code on the Invite codes page. Your child signs up with it and appears here.</span><a class="btn primary sm" href="#add-child">Add your child</a></div></section>'}
       ${kids.length ? `<section class="panel slim"><div class="panel-head"><div><h2>Add another child</h2><p class="muted small">Create a login for them, with or without an email.</p></div><a class="btn ghost sm" href="#add-child">Add a child</a></div></section>` : ''}`));
+    app.querySelectorAll('[data-ctrack]').forEach((b) => { b.onclick = async () => {
+      if (!b.dataset.sure) { b.dataset.sure = 1; b.textContent = `Press again to switch to ${TR[b.dataset.to]} (courses already made stay)`; return; }
+      b.disabled = true; try { await api.setChildTrack(b.dataset.ctrack, b.dataset.to); await load(); parentHome(); } catch (x) { b.disabled = false; b.textContent = x.message; } }; });
     app.querySelectorAll('[data-reset-child]').forEach((b) => { b.onclick = () => {
       const id = b.dataset.resetChild; const slot = document.getElementById('reset-' + id);
       slot.innerHTML = `<form class="form-row row" id="rf-${esc(id)}"><label for="rp-${esc(id)}">New password <small>at least 8 characters</small><input id="rp-${esc(id)}" type="text" minlength="8" required autocomplete="off"></label><button class="btn primary sm">Save password</button><span class="out"></span></form>`;
@@ -935,12 +988,57 @@
       </div>
       <section class="panel"><h2>Students' courses</h2>${D.courses.length ? `<div class="course-grid">${D.courses.map((c) => courseCard(c, true)).join('')}</div>` : '<p class="muted small">No course plans yet.</p>'}</section>`));
   }
-  function everyonePage() {
-    shell('everyone', page(`<div class="page-head"><p class="kicker dark">Owner</p><h1>Everyone</h1><p class="muted">All accounts in the beta.</p></div>
-      <section class="panel"><div class="scroll-x"><table class="data"><thead><tr><th>Name</th><th>Account</th><th>Courses</th><th>Linked to</th></tr></thead><tbody>
-      ${D.people.map((p) => `<tr><td><b>${esc(p.full_name)}</b></td><td>${ROLE[p.role] || ''}${p.is_platform_admin ? ' · owner' : ''}</td><td>${coursesOf(p.id).map((c) => esc(c.subject)).join(', ') || '–'}</td>
+  // Access switches (owner: GCSE, 11+ and bank managers; bank manager: 11+ only), plus the log of every change.
+  async function everyonePage(msg) {
+    const admin = me.is_platform_admin; let list = null; let log = []; let err = '';
+    try { [list, log] = await Promise.all([api.accessList(), api.adminLog()]); } catch (x) { err = /does not exist|schema cache|could not find/i.test(x.message) ? 'Access switches need a quick database update first (v2-elevenplus.sql).' : x.message; }
+    const names = Object.fromEntries([...(D.people || []), ...(list || [])].map((p) => [p.id, p.full_name]));
+    const sw = (p, t, dis) => `<label class="switch-row acc-sw"><input type="checkbox" data-acc="${esc(p.id)}" data-tr="${t}" ${tracksOf(p).includes(t) ? 'checked' : ''} ${dis ? 'disabled' : ''} aria-label="${TR[t]} for ${esc(p.full_name)}"><span>${TR[t]}</span></label>`;
+    const accessPanel = list ? `<section class="panel"><div class="panel-head"><div><h2>Access</h2><p class="muted small">${admin ? 'Switch GCSE and 11+ on or off for each parent, teacher or school. A track that is off is hidden from them completely. 11+ also opens the Ninegrade 11+ bank. Bank managers can add papers to the Ninegrade bank and switch 11+ on or off for parents.' : 'Switch 11+ on or off for each parent. 11+ shows the 11+ subjects and tests, and opens the Ninegrade 11+ bank. Only the site owner changes GCSE.'}</p></div></div>
+      <div id="acc-msg">${msg || ''}</div>
+      <div class="scroll-x"><table class="data acc"><thead><tr><th>Name</th><th>Account</th><th>Tracks</th>${admin ? '<th>Bank manager</th>' : ''}</tr></thead><tbody>
+      ${list.map((p) => `<tr><td><b>${esc(p.full_name)}</b>${p.children ? `<br><span class="muted small">${p.children} ${p.children === 1 ? 'child' : 'children'}</span>` : ''}</td><td>${ROLE[p.role] || ''}${p.is_platform_admin ? ' · owner' : ''}</td>
+        <td>${p.is_platform_admin ? '<span class="muted small">Everything</span>' : `<div class="row">${sw(p, 'gcse', !admin)}${sw(p, 'elevenplus', p.id === me.id && !admin)}</div>`}</td>
+        ${admin ? `<td>${p.is_platform_admin ? '' : `<label class="switch-row acc-sw"><input type="checkbox" data-mgr="${esc(p.id)}" ${p.is_bank_manager ? 'checked' : ''} aria-label="Bank manager: ${esc(p.full_name)}"><span>${p.is_bank_manager ? 'Yes' : 'No'}</span></label>`}</td>` : ''}</tr>`).join('')}
+      </tbody></table></div></section>` : `<section class="panel"><p class="msg err">${esc(err)}</p></section>`;
+    const logPanel = log.length ? `<section class="panel"><h2>Change log</h2><p class="muted small">Every access change and Ninegrade bank decision: who did it and when.</p><ul class="log-list">${log.map((l) => `<li><span class="muted small">${new Date(l.created_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span> <b>${esc(names[l.done_by] || 'Someone')}</b>: ${esc(l.action)}${l.person_id && l.person_id !== l.done_by ? ` · ${esc(names[l.person_id] || 'someone')}` : ''}${l.note ? ` · <span class="muted">“${esc(l.note)}”</span>` : ''}</li>`).join('')}</ul></section>` : '';
+    shell('everyone', page(`<div class="page-head"><p class="kicker dark">${admin ? 'Owner' : 'Bank manager'}</p><h1>${admin ? 'Everyone' : '11+ access'}</h1><p class="muted">${admin ? 'All accounts in the beta, and what each can use.' : 'Parents who can use 11+ on Ninegrade.'}</p></div>
+      ${accessPanel}${admin ? everyoneTable() : ''}${logPanel}`));
+    app.querySelectorAll('[data-acc]').forEach((c) => { c.onchange = async () => { c.disabled = true;
+      try { await api.setAccess(c.dataset.acc, c.dataset.tr, c.checked); everyonePage(`<p class="msg ok">${TR[c.dataset.tr]} switched ${c.checked ? 'on' : 'off'} for ${esc(names[c.dataset.acc] || 'them')}.</p>`); }
+      catch (x) { everyonePage(`<p class="msg err">${esc(x.message)}</p>`); } }; });
+    app.querySelectorAll('[data-mgr]').forEach((c) => { c.onchange = async () => { c.disabled = true;
+      try { await api.setBankManager(c.dataset.mgr, c.checked); everyonePage(`<p class="msg ok">${esc(names[c.dataset.mgr] || 'They')} ${c.checked ? 'is now a bank manager (and has 11+)' : 'is no longer a bank manager'}.</p>`); }
+      catch (x) { everyonePage(`<p class="msg err">${esc(x.message)}</p>`); } }; });
+  }
+  function everyoneTable() {
+    return `<section class="panel"><h2>All accounts</h2><div class="scroll-x"><table class="data"><thead><tr><th>Name</th><th>Account</th><th>Courses</th><th>Linked to</th></tr></thead><tbody>
+      ${D.people.map((p) => `<tr><td><b>${esc(p.full_name)}</b></td><td>${ROLE[p.role] || ''}${p.is_platform_admin ? ' · owner' : ''}${p.role === 'student' ? ` · ${TR[tracksOf(p)[0]]}` : ''}</td><td>${coursesOf(p.id).map((c) => esc(c.subject)).join(', ') || '–'}</td>
         <td class="small">${[...D.guardianships.filter((g) => g.student_id === p.id).map((g) => 'Parent: ' + esc(person(g.parent_id).full_name)), ...D.classStudents.filter((x) => x.student_id === p.id).map((x) => 'Class: ' + esc((D.classes.find((c) => c.id === x.class_id) || {}).name || '')), ...D.members.filter((m) => m.person_id === p.id).map((m) => esc((D.schools.find((s) => s.id === m.school_id) || {}).name || ''))].join('<br>') || '–'}</td></tr>`).join('')}
-      </tbody></table></div></section>`));
+      </tbody></table></div></section>`;
+  }
+
+  // ---------- sharing and contributions (terms) ----------
+  function sharingTerms() {
+    shell('sharing-terms', page(`<div class="narrow"><div class="page-head">${me ? '<a class="small" href="#home">← Dashboard</a>' : '<a class="small" href="#">← Home</a>'}<p class="kicker dark">Terms</p><h1>Sharing and contributions</h1>
+      <p class="muted">How papers in the question bank are owned, shared and kept.</p></div>
+      <section class="panel"><h2>Your own papers</h2><ul class="tick-list">
+        <li>Papers you add to "My bank" are yours. Only you (and the site owner, to fix problems) can change them.</li>
+        <li>If you leave Ninegrade, your own papers are deleted with your account.</li>
+        <li>Your children's work and marks are never shared with anyone else.</li></ul></section>
+      <section class="panel"><h2>Sharing by code</h2><ul class="tick-list">
+        <li>A paper you share by code still belongs to you. People with the code can make practice from it but can't change it.</li>
+        <li>If you stop sharing or leave, they keep the practice they've already made, but can't make new practice from it.</li>
+        <li>Only share papers you wrote, or that you have permission to share.</li></ul></section>
+      <section class="panel"><h2>Offering a paper to the Ninegrade bank</h2><ul class="tick-list">
+        <li>When you offer a paper, you confirm you wrote it or have permission, and that Ninegrade may keep it, change it and share it with other families on Ninegrade.</li>
+        <li>The site owner or a bank manager checks it first. They may approve it, ask for changes or turn it down. Until then, you can still use it privately.</li>
+        <li>Once approved, the paper belongs to Ninegrade. It shows "contributed by" with your name, and stays in the bank if you leave.</li>
+        <li>Papers from exam boards, test providers, publishers, tutors or schools (for example CGP, Bond, GL or Kent familiarisation papers) are only accepted with written permission from whoever owns them.</li></ul></section>
+      <section class="panel"><h2>The Ninegrade bank</h2><ul class="tick-list">
+        <li>Ninegrade bank papers are written by Ninegrade or given to Ninegrade with permission.</li>
+        <li>Families who have access can make practice, mocks, quizzes and lessons from them. They can't change or download the bank itself.</li>
+        <li>If access is switched off, a family keeps the practice already made from the bank.</li></ul></section></div>`), { dark: !me });
   }
 
   // ---------- invite requests ----------
@@ -952,6 +1050,7 @@
       <p class="muted">Tell us a little about you and we'll email you an invite code.</p>
       <form id="f" class="form" novalidate>
         <fieldset class="tiers"><legend>I am a…</legend>${roles.map(([v, t], i) => `<label class="radio"><input type="radio" name="role" value="${v}" ${i === 0 ? 'checked' : ''}> ${t}</label>`).join('')}</fieldset>
+        <fieldset class="tiers"><legend>Interested in</legend>${[['GCSE', 'GCSE'], ['11+', '11+'], ['GCSE and 11+', 'Both']].map(([v, t], i) => `<label class="radio"><input type="radio" name="r-track" value="${v}" ${i === 0 ? 'checked' : ''}> ${t}</label>`).join('')}</fieldset>
         <label for="r-name">Your name<input id="r-name" required maxlength="80" autocomplete="name"></label>
         <label for="r-email">Email<input id="r-email" type="email" required maxlength="120" autocomplete="email"></label>
         <label for="r-note">Anything we should know? <small>optional, e.g. subjects, exam year, school name</small><textarea id="r-note" rows="3" maxlength="500"></textarea></label>
@@ -967,7 +1066,7 @@
       if (v('r-web')) return requestView(true);
       if (!v('r-name') || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v('r-email'))) { out.innerHTML = '<p class="msg err">Please give your name and a valid email.</p>'; return; }
       b.disabled = true; b.textContent = 'Sending…';
-      try { await api.requestInvite({ full_name: v('r-name'), email: v('r-email'), role: f.querySelector('input[name=role]:checked').value, note: v('r-note') }); requestView(true); }
+      try { await api.requestInvite({ full_name: v('r-name'), email: v('r-email'), role: f.querySelector('input[name=role]:checked').value, note: `[${(f.querySelector('input[name=r-track]:checked') || {}).value || 'GCSE'}] ${v('r-note')}`.trim().slice(0, 500) }); requestView(true); }
       catch (x) { out.innerHTML = `<p class="msg err">${esc(x.message)}</p>`; b.disabled = false; b.textContent = 'Send request'; }
     };
   }
@@ -986,10 +1085,11 @@
       const r = find(b.dataset.reqCode); b.disabled = true;
       try {
         const code = newCode();
-        await api.addInvite({ code, role: r.role, max_uses: 1, note: (r.full_name + ' ' + r.email).slice(0, 80), expires_at: new Date(Date.now() + 30 * 864e5).toISOString() });
+        const tracks = /^\[GCSE and 11\+\]/.test(r.note || '') ? ['gcse', 'elevenplus'] : /^\[11\+\]/.test(r.note || '') ? ['elevenplus'] : ['gcse'];
+        await api.addInvite({ code, role: r.role, max_uses: 1, tracks: r.role === 'student' ? [tracks[0]] : tracks, note: (r.full_name + ' ' + r.email).slice(0, 80), expires_at: new Date(Date.now() + 30 * 864e5).toISOString() });
         await api.setRequest(r.id, 'done');
         const link = location.href.split('#')[0] + '#signup';
-        const body = `Hi ${r.full_name.split(' ')[0]},\n\nThank you for your interest in Ninegrade GCSE Plan. Here is your invite code:\n\n${code}\n\nTo create your account, go to ${link}, choose "${ROLE[r.role]}" and enter the code. It works once and expires in 30 days.\n\nBest wishes,\n${me.full_name}`;
+        const body = `Hi ${r.full_name.split(' ')[0]},\n\nThank you for your interest in Ninegrade. Here is your invite code:\n\n${code}\n\nTo create your account, go to ${link}, choose "${ROLE[r.role]}" and enter the code. It works once and expires in 30 days.\n\nBest wishes,\n${me.full_name}`;
         const mail = `mailto:${encodeURIComponent(r.email)}?subject=${encodeURIComponent('Your Ninegrade invite code')}&body=${encodeURIComponent(body)}`;
         const gmail = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(r.email)}&su=${encodeURIComponent('Your Ninegrade invite code')}&body=${encodeURIComponent(body)}`;
         await load(); invitesPage();
@@ -1065,13 +1165,14 @@
         if (route === 'forgot') return forgotView();
         if (route === 'boards') return boardsPage();
         if (route === 'request') return requestView();
+        if (route === 'sharing-terms') return sharingTerms();
         return landing();
       }
       if (!me.role) return shell('', page('<section class="panel"><h1>Almost there</h1><p>This login isn\'t set up for the new site yet. Ask the site owner to add it.</p></section>'));
       await load();
       if (!study.checked) await study.init();
       if (study.role) await study.load();
-      await practice.refreshCounts();
+      await practice.refreshCounts(); await bank.refreshCounts();
       if (recovering && !window.__recoveryShown) { window.__recoveryShown = true; history.replaceState(null, '', location.pathname + location.search + '#account'); return accountPage({ recovery: true }); }
       if (route === '' || route === 'signin' || route === 'signup') { location.replace('#home'); return; }
       if (route === 'welcome') return landing();
@@ -1083,7 +1184,8 @@
       if (route === 'invites') return invitesPage();
       if (route === 'add-child' && me.role === 'parent') return addChildPage();
       if (route === 'account') return accountPage();
-      if (route === 'everyone' && me.is_platform_admin) return everyonePage();
+      if (route === 'everyone' && isStaff()) return everyonePage();
+      if (route === 'sharing-terms') return sharingTerms();
       if (route === 'feedback' && me.is_platform_admin) return feedbackPage();
       if (await study.route(route)) return;
       if (await practice.route(route)) return;

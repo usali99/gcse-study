@@ -245,6 +245,19 @@ Parents and teachers add papers straight to the bank ("Add a paper"). For every 
 3. Patch the paper: `status` = `ready`, `reply` = one line for the parent ("Saved 70 questions with your answers.").
    If it can't be read or the answers are missing, set `status` = `failed` and `reply` saying exactly what's needed.
 4. Mention new papers in the run summary.
+5. Ninegrade bank papers (`collection=ninegrade`, needs v2-elevenplus.sql) have no `owner_id`; the files sit under the
+   `added_by` person's folder. Split them the same way. `track` is `gcse` or `elevenplus`: for 11+ (Maths, English,
+   Verbal reasoning, Non-verbal reasoning) use 11+ style topics (e.g. "Synonyms", "Number series", "Matrices"). For
+   non-verbal reasoning pictures, describe each shape in words until bank questions take pictures (stage 4).
+
+### Ninegrade bank and 11+ (v2-elevenplus.sql)
+- `people.tracks` (gcse / elevenplus) decides what each parent sees; a child has one track. Changes only through the
+  site (owner or bank managers); never change tracks, bank managers or Ninegrade bank decisions from a run.
+- Papers offered by parents (`review=offered`) and bank-manager exam board/publisher papers (`review=pending`) wait
+  for a person's decision on More > Bank approvals. Mention any waiting in the run summary ("2 papers waiting for
+  approval"); don't approve them.
+- An 11+ child's lessons, practice and marking follow the 11+ test in their course (`board` = Kent Test, GL, CSSE,
+  ISEB), Year 5 to 6 level, 20 to 30 minute sessions.
 
 ### Bank quizzes and lessons (`practice_sets` requested with `bank_question_ids`)
 Use ONLY those bank questions (in order) and their `bank_answers` as the baseline. quiz: turn each into a self-marking
