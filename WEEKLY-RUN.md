@@ -37,6 +37,32 @@ node tools/db.mjs patch submissions "id=eq.<id>" '{"mark":6,"mark_max":8,"feedba
 
 Do not overwrite a mark Usman has already given (mark not null).
 
+**Feedback layout (Usman, 20 Nov 2026: "add your feedback clearly").** Every piece of feedback (lessons and practice
+sets, every run) uses this plain-text layout, addressed to the student, short lines, UK English:
+
+```
+Mark: 8 out of 12
+
+WHAT WENT WELL
+• one or two specific things
+
+PART BY PART
+Part A: <what the task asked, in a few words>. 5/5 ✔
+Part C: <what the task asked>. 0/4 ✘
+   You wrote: "<short quote>"   (or what they did)
+   Correct: "<the right answer or a model>"
+(one line per part or question; ✔ for full marks; for each lost mark say what was asked, what they did, and the right answer)
+
+FIX NEXT TIME
+1. the most important habit to change
+2. ... (at most 3)
+
+TRY THIS NOW (2 minutes)
+one tiny practice task on the main weakness (no answer given)
+```
+Always say what each part asked, so a parent reading it without the lesson open can follow it. Never paste the
+answer sheet, but do give the correct answer for each mark lost.
+
 ## 3. Update weak topics
 
 From quiz scores, marks and timing, update each skill's status (Not yet tested, Weak, Improving, Secure;
