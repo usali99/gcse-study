@@ -231,6 +231,7 @@
   });
   const study = window.createStudy({ awayDays: (sid) => api.awayDays(sid), who: (r) => (!me ? null : r === 'student' ? me.id : (childrenOf(me.id)[0] || {}).id), sb: api.sb, demo: api.demo, getMeId: () => me && me.id, shell: (...a) => shell(...a), page: (...a) => page(...a), esc, today, app, report });
   const practice = window.createPractice({ sb: api.sb, demo: api.demo, esc, fmt, today, app, shell: (...a) => shell(...a), page: (...a) => page(...a), me: () => me, D: () => D, person: (id) => person(id), managedBy: (sid) => managedBy(sid), setByNote: (sid) => setByNote(sid) });
+  const bank = window.createBank({ sb: api.sb, demo: api.demo, esc, today, app, shell: (...a) => shell(...a), page: (...a) => page(...a), me: () => me, person: (id) => person(id), practice });
 
   // Derived lookups over the loaded data.
   const person = (id) => D.people.find((p) => p.id === id) || { id, full_name: 'Someone', role: 'student' };
@@ -243,7 +244,7 @@
   // ---------- shell ----------
   function navFor() {
     if (!me || !me.role) return [];
-    const n = [['home', 'Dashboard'], ...study.nav(), ...practice.nav()];
+    const n = [['home', 'Dashboard'], ...study.nav(), ...practice.nav(), ...bank.nav()];
     if (me.is_platform_admin || ['school_admin', 'teacher', 'parent'].includes(me.role)) n.push(['invites', 'Invite codes']);
     n.push(['boards', 'Exam boards']);
     if (me.is_platform_admin) { const nf = D && D.feedback ? D.feedback.filter((f) => f.status === 'new').length : 0; n.push(['everyone', 'Everyone'], ['feedback', `Feedback${nf ? ` <span class="count">${nf}</span>` : ''}`]); }
@@ -407,7 +408,7 @@
       </div></div>`));
     if (api.demo) {
       app.querySelectorAll('[data-acct]').forEach((b) => { b.onclick = async () => { await api.signIn(b.dataset.acct); location.hash = '#home'; render(); }; });
-      document.getElementById('reset').onclick = (e) => { api.reset(); if (study.reset) study.reset(); practice.reset(); e.target.textContent = 'Preview reset'; };
+      document.getElementById('reset').onclick = (e) => { api.reset(); if (study.reset) study.reset(); practice.reset(); bank.reset(); e.target.textContent = 'Preview reset'; };
     } else {
       document.getElementById('f').onsubmit = async (e) => {
         e.preventDefault(); const b = document.getElementById('go'); b.disabled = true; b.textContent = 'Signing in…';
@@ -1086,6 +1087,7 @@
       if (route === 'feedback' && me.is_platform_admin) return feedbackPage();
       if (await study.route(route)) return;
       if (await practice.route(route)) return;
+      if (await bank.route(route)) return;
       if (me.role === 'student') return studentHome();
       if (me.is_platform_admin && !childrenOf(me.id).length && !coursesOf(me.id).length) return ownerHome();
       if (me.role === 'parent') return parentHome();

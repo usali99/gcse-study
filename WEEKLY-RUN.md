@@ -229,6 +229,19 @@ make a fresh version of that set with NEW questions, same level and length, unle
    `requested` and patch only `reply` saying what's needed (the parent sees it on the set's page); mention it in the summary.
    Never set status `assigned`: the parent assigns.
 
+### Save uploaded papers to the question bank (needs v2-bank.sql; skip quietly if `bank_papers` doesn't exist)
+After making a set from a parent's or teacher's UPLOADED paper with `as_is=true` (not `based_on`), save the paper to
+their question bank once, so they never have to upload it again:
+1. If a `bank_papers` row already has `source_set` = a set made from the same `source_files`, skip.
+2. Insert the paper: owner_id = the set's created_by, title, subject, source_set = the set id, sharing private.
+3. One `bank_questions` row per question, in paper order: position 1..n, num ("1a"), section ("Question 1: ..."),
+   question = the exact wording as PLAIN TEXT (no HTML; describe a diagram in words), marks, topic (short, e.g. "Density";
+   reuse the same names within a paper).
+4. One `bank_answers` row per question: the parent's answer, word for word, plain text ("(added by Ninegrade)" only where
+   they gave none).
+5. Patch the set's `bank_paper_id` and `bank_question_ids` (ids in order), so the bank knows the child has done them.
+6. Say "saved to your question bank" in the set's `reply`.
+
 ### Mark practice tries
 1. `get "practice_attempts?mark=is.null&order=created_at"`. Quiz-only sets (kind quiz) mark themselves: patch
    `mark`=`quiz_score`, `mark_max`=`quiz_max`, short feedback only if useful, `marked_at`.
@@ -242,6 +255,8 @@ make a fresh version of that set with NEW questions, same level and length, unle
    (and a "Check:" note on the answer sheet) so they can decide; don't change the student's mark on your own.
    2. Otherwise mark against the answer sheet like weekly work (photos: `download "<path>" <out> practice`). Several tries
    of the same set are separate attempts: mark each, and say what improved since the last try.
-3. `patch practice_attempts "id=eq.<id>" '{"mark":…,"mark_max":…,"feedback":"…","marked_at":"<now>"}'`. Feedback is
+3. `patch practice_attempts "id=eq.<id>" '{"mark":…,"mark_max":…,"feedback":"…","marked_at":"<now>"}'`.
+   If the set has `bank_question_ids`, also upsert each question's mark into `bank_results` (student_id, question_id,
+   mark, mark_max, marked_at; on conflict student_id,question_id; latest try wins). This drives "Ones got wrong before". Feedback is
    for the student (kind, numbered, what to fix). Update weak topics from Hadi's practice like weekly work.
 4. Add practice made and marked to the run's summary.

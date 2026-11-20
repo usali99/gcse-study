@@ -489,3 +489,17 @@ details.panel > summary { cursor: pointer; }
 .more-menu a:hover, .more-menu a[aria-current] { background: var(--surface-2); }
 .more-menu a[aria-current] { font-weight: 700; }
 @media (max-width: 640px) { .nav a, .nav-more > summary { padding: 8px 10px; } }
+.bank-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.bank-q { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+.bq-pick input { width: 20px; height: 20px; margin-top: 2px; }
+.bq-body { flex: 1; min-width: 0; display: grid; gap: 6px; }
+.bq-top { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.bq-top .pill { margin-left: auto; }
+.bq-text { overflow-wrap: anywhere; }
+.bq-ans summary { cursor: pointer; color: var(--ink-2); }
+.bq-body > .btn { justify-self: start; }
+.share-code { display: grid; gap: 4px; padding: 12px 14px; border: 1px dashed var(--line); border-radius: 12px; margin: 8px 0 12px; }
+.share-code b { font-size: 1.4rem; letter-spacing: .12em; font-family: ui-monospace, Menlo, monospace; }
+.check-row { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.check-row input { width: 20px; height: 20px; margin-top: 2px; flex: none; }
+.btn.danger { border-color: var(--bad, #c0392b); color: var(--bad, #c0392b); }

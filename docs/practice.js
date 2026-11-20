@@ -90,6 +90,8 @@
           S.attempts.unshift({ ...a, id: 'pa' + Date.now(), student_id: me().id, files: files.map((f) => `${me().id}/work/${f.name}`), mark: null, mark_max: null, feedback: null, created_at: new Date().toISOString() }); save(); },
         async mark(id, m) { S.attempts.forEach((x) => { if (x.id === id && isStaffFor(x.student_id)) Object.assign(x, m); }); save(); },
         async fileUrl() { throw new Error('Files are not stored in the preview.'); },
+        demoInsert(set, ansHtml) { const id = 'ps' + Date.now() + Math.floor(Math.random() * 1e3);
+          S.sets.unshift({ source_text: '', source_files: [], note: '', based_on: null, quiz: [], created_by: me().id, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), ...set, id }); S.answers[id] = ansHtml; save(); return id; },
       };
     }
 
@@ -152,7 +154,7 @@
       const sec = (status, title, help) => { const l = group(status); return l.length ? `<section class="panel"><h2>${title} <span class="count">${l.length}</span></h2>${help ? `<p class="muted small">${help}</p>` : ''}${l.map((s) => setCard(s, atts)).join('')}</section>` : ''; };
       shell('practice', page(`<div class="narrow"><div class="page-head">${myStudents().length > 1 ? '<a class="small" href="#practice">← All students</a>' : ''}<p class="kicker dark">Practice</p><h1>${self ? 'My practice sets' : `Practice for ${esc(first(st))}`}</h1>
         <p class="muted">Paste text or upload a worksheet, notes or a past paper, and choose what to make from it. Ninegrade prepares it at the evening run (weekdays, about 5:40 PM). You check it, then assign it.</p>
-        <div class="row"><a class="btn primary" href="#pnew-${esc(sid)}">New practice set</a></div></div><div id="flash"></div>
+        <div class="row"><a class="btn primary" href="#pnew-${esc(sid)}">New practice set</a>${self ? '' : '<a class="btn ghost" href="#bank">From the question bank</a>'}</div></div><div id="flash"></div>
         ${sec('draft', 'Ready for you to check', `Open each one, read it with its answer sheet, then press Assign to send it to ${self ? 'yourself' : esc(first(st))}.`)}
         ${sec('requested', 'Being prepared', 'Ninegrade makes these at the next evening run.')}
         ${sec('assigned', self ? 'Assigned' : `Assigned to ${esc(first(st))}`, '')}
@@ -385,6 +387,6 @@
       if (r.startsWith('pset-')) { await setPage(r.slice(5)); return true; }
       return false;
     }
-    return { nav, route, refreshCounts, reset: () => api.reset && api.reset(), isStaffFor };
+    return { nav, route, refreshCounts, reset: () => api.reset && api.reset(), isStaffFor, myStudents, demoInsert: (set, ans) => api.demoInsert(set, ans), sets: () => api.sets() };
   };
 })();

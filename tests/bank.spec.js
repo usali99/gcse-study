@@ -1,0 +1,74 @@
+const { test, expect, signIn, signOut, go, noSideScroll } = require('./helpers');
+
+test('question bank lists my papers, shared papers and the library, under More', async ({ page }) => {
+  await signIn(page, 'usman');
+  await expect(page.locator('.nav a[href="#bank"]')).toHaveCount(1);
+  await go(page, '#bank');
+  await expect(page.locator('.panel', { hasText: 'My papers' })).toContainText('Physics Paper A.1');
+  await expect(page.locator('.panel', { hasText: 'Ninegrade library' })).toContainText('Percentages starter');
+  await page.fill('#bj-code', 'nope');
+  await page.click('#bjoin button');
+  await expect(page.locator('#bj-msg')).toContainText("doesn't match");
+  await page.fill('#bj-code', 'demo1234');
+  await page.click('#bjoin button');
+  await expect(page).toHaveURL(/#bank-bp3/);
+  await expect(page.locator('body')).toContainText('shared with you');
+  await noSideScroll(page);
+});
+
+test('make practice now: next ones not done yet, ready straight away with the answer sheet', async ({ page }) => {
+  await signIn(page, 'usman');
+  await go(page, '#bank-bp1');
+  await page.fill('#b-n', '3');
+  await expect(page.locator('#b-preview')).toContainText('1c, 1d, 1e');
+  await page.click('#b-go');
+  await expect(page).toHaveURL(/#pset-/);
+  await expect(page.locator('.status-draft')).toBeVisible();
+  await expect(page.locator('.lesson').first()).toContainText('displacement can');
+  await page.locator('#pans summary').click();
+  await expect(page.locator('#pans')).toContainText('For the parent only');
+  // Next time it carries on from 2a.
+  await go(page, '#bank-bp1');
+  await page.fill('#b-n', '2');
+  await expect(page.locator('#b-preview')).toContainText('2a, 2b');
+});
+
+test('make practice: got wrong before, one topic, and pick by hand', async ({ page }) => {
+  await signIn(page, 'usman');
+  await go(page, '#bank-bp1');
+  await page.check('input[name=bmode][value=wrong]');
+  await expect(page.locator('#b-preview')).toContainText('1b');
+  await page.check('input[name=bmode][value=topic]');
+  await page.selectOption('#b-topic', 'Circuits');
+  await page.fill('#b-n', '10');
+  await expect(page.locator('#b-preview')).toContainText('5 questions');
+  await page.check('input[name=bmode][value=pick]');
+  await page.locator('.bq-pick input').nth(9).check();
+  await expect(page.locator('#b-preview')).toContainText('1 question (3 marks): 2e');
+});
+
+test('owner edits a question; sharing needs permission and gives a code', async ({ page }) => {
+  await signIn(page, 'usman');
+  await go(page, '#bank-bp1');
+  await page.locator('[data-bedit]').first().click();
+  await page.fill('.be-q', 'Describe particles in a solid and a gas.');
+  await page.fill('.be-a', 'Solid: fixed, vibrate. Gas: far apart, random.');
+  await page.click('.bq-edit button.primary');
+  await expect(page.locator('.bq-text').first()).toHaveText('Describe particles in a solid and a gas.');
+  await page.click('[data-bshare=shared]');
+  await expect(page.locator('#bs-msg')).toContainText('Tick the box');
+  await page.check('#bs-perm');
+  await page.click('[data-bshare=shared]');
+  await expect(page.locator('#bcode')).toHaveText(/^[A-Z0-9]{6,}$/);
+  await page.click('[data-bshare=private]');
+  await expect(page.locator('#bcode')).toHaveCount(0);
+});
+
+test('students never see the question bank', async ({ page }) => {
+  await signIn(page, 'hadi');
+  await expect(page.locator('.nav a[href="#bank"]')).toHaveCount(0);
+  await go(page, '#bank');
+  await expect(page.locator('body')).toContainText('for parents and teachers');
+  await go(page, '#bank-bp1');
+  await expect(page.locator('body')).not.toContainText('displacement can');
+});
