@@ -180,11 +180,20 @@ make a fresh version of that set with NEW questions, same level and length, unle
      quizzes: `mc` with `options` + `answer` index, `num` with `answer` (+ `tol`), `short` with `accept` list; optional `explain`).
    - **practice**: exam-style questions with marks shown, numbered, in `body_html`; 3–6 warm-up `quiz` questions optional.
    - **mock**: a full timed paper: instructions box (time allowed = `minutes`, total marks), numbered questions with marks.
-     If they uploaded a real past paper, base the mock on its structure and style, but write NEW questions unless the
-     note asks to use the paper as it is.
+     (For new questions from a real past paper, follow its structure and style.)
+   **Questions: `as_is` (Usman, 20 Nov 2026).** `as_is=true` = the parent wants THEIR questions exactly as given: copy every
+   question word for word, in the same order, with the same marks, numbers, diagrams described in words if they can't be shown,
+   and the same time allowed. Only set it out for the site (and for kind quiz, turn the questions into self-marking `quiz`
+   items without changing their wording). Don't add, drop, simplify or reword questions; if something can't be read, say so in
+   `reply` and leave the set `requested`. `as_is=false` (and every `based_on` "Make another like this") = write NEW questions on the
+   same topics, level and length.
+   **The parent's own answers.** `get "practice_answers?set_id=eq.<id>&select=given_text,given_files"` (files: download from the
+   practice bucket). If given, they ARE the mark scheme: build the answer sheet from them (tidy layout, keep their answers and
+   marks exactly), and only add answers for questions they don't cover, labelled "(added by Ninegrade)". If the parent's answer
+   looks wrong, keep it but add a short "Check:" note for the parent. Mark tries against the parent's answers. Never show them to the student.
    Never put answers in `body_html` or `quiz` explanations of written questions. `body_html` is shown as-is: use simple
    HTML (h2, h3, p, ol, ul, table, b, i), no scripts, no images from outside.
-4. Write the answer sheet (mark scheme with marks, model answers, common mistakes) "For the parent only."
+4. Write the answer sheet (mark scheme with marks, model answers, common mistakes) "For the parent only." Keep the parent's `given_text`/`given_files` (the upsert below only changes `body_html`).
 5. Save: `upsert practice_answers '[{"set_id":"<id>","body_html":"…"}]' set_id`, then
    `patch practice_sets "id=eq.<id>" '{"status":"draft","title":"…","minutes":N,"body_html":"…","quiz":[…],"reply":"…"}'`.
    `reply` = one or two sentences for the parent ("Made from your worksheet: 10 questions on fractions of amounts, about

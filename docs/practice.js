@@ -17,7 +17,7 @@
   window.createPractice = function (ctx) {
     const { esc, fmt, shell, page, app } = ctx;
     const me = () => ctx.me(); const D = () => ctx.D();
-    const nice = (x) => { const m = String((x && x.message) || x); return /does not exist|schema cache|relation .* does not exist/i.test(m) ? SQL_HINT : m; };
+    const nice = (x) => { const m = String((x && x.message) || x); if (/as_is|given_(text|files)|replaces_lessons/.test(m)) return 'This needs a quick database update first. Ask the site owner to run v2-practice-answers.sql.'; return /does not exist|schema cache|relation .* does not exist/i.test(m) ? SQL_HINT : m; };
 
     // ---------- who can do what (the database enforces the same rules) ----------
     const isStaffFor = (sid) => { const m = me(); const d = D(); if (!m || m.id === sid) return false;
@@ -42,7 +42,10 @@
         async set(id) { return must(await sb.from('practice_sets').select('*').eq('id', id).maybeSingle()); },
         async answers(id) { const r = await sb.from('practice_answers').select('body_html').eq('set_id', id).maybeSingle(); return r.data ? r.data.body_html : null; },
         async attempts(setId) { let q = sb.from('practice_attempts').select('*').order('created_at', { ascending: false }); if (setId) q = q.eq('set_id', setId); return must(await q); },
-        async create(s, files) { const source_files = [...(s.source_files || []), ...(await up('sources/' + Date.now(), files))]; must(await sb.from('practice_sets').insert({ ...s, source_files })); return source_files; },
+        async create(s, files) { const source_files = [...(s.source_files || []), ...(await up('sources/' + Date.now(), files))]; const r = must(await sb.from('practice_sets').insert({ ...s, source_files }).select('id').single()); return { source_files, id: r.id }; },
+        async upload(folder, files) { return up(folder + '/' + Date.now(), files); },
+        async addGiven(set_id, given_text, given_files) { must(await sb.from('practice_answers').insert({ set_id, given_text, given_files })); },
+        async given(id) { const r = await sb.from('practice_answers').select('given_text,given_files').eq('set_id', id).maybeSingle(); return r.data || null; },
         async update(id, patch) { must(await sb.from('practice_sets').update(patch).eq('id', id)); },
         async remove(id) { must(await sb.from('practice_sets').delete().eq('id', id)); },
         async addAttempt(a, files) { const paths = await up('work/' + a.set_id + '/' + Date.now(), files); must(await sb.from('practice_attempts').insert({ ...a, files: paths })); },
@@ -76,7 +79,10 @@
         async answers(id) { return staffOfSet(id) ? S.answers[id] || null : null; },
         async attempts(setId) { return S.attempts.filter((a) => (!setId || a.set_id === setId) && (a.student_id === me().id || isStaffFor(a.student_id))); },
         async create(s, files) { if (!canEdit(s.student_id)) throw new Error('You can only make practice for your own students.');
-          S.sets.unshift({ ...s, id: 'ps' + Date.now(), created_by: me().id, status: 'requested', body_html: '', quiz: [], reply: '', source_files: [...(s.source_files || []), ...files.map((f) => `${me().id}/sources/${f.name}`)], created_at: new Date().toISOString(), updated_at: new Date().toISOString() }); save(); return S.sets[0].source_files; },
+          S.sets.unshift({ ...s, id: 'ps' + Date.now() + Math.floor(Math.random() * 1e3), created_by: me().id, status: 'requested', body_html: '', quiz: [], reply: '', source_files: [...(s.source_files || []), ...files.map((f) => `${me().id}/sources/${f.name}`)], created_at: new Date().toISOString(), updated_at: new Date().toISOString() }); save(); return { source_files: S.sets[0].source_files, id: S.sets[0].id }; },
+        async upload(folder, files) { return files.map((f) => `${me().id}/${folder}/${f.name}`); },
+        async addGiven(id, given_text, given_files) { if (!S.sets.some((x) => x.id === id && x.created_by === me().id)) throw new Error('Not allowed.'); S.given = S.given || {}; S.given[id] = { given_text, given_files }; save(); },
+        async given(id) { return staffOfSet(id) ? (S.given || {})[id] || null : null; },
         async update(id, patch) { const s = S.sets.find((x) => x.id === id); if (!s || !canEdit(s.student_id)) throw new Error('You can only change your own students\' practice.');
           if (patch.status === 'assigned' && !s.body_html) throw new Error('This set is not ready yet.'); Object.assign(s, patch, { updated_at: new Date().toISOString() }); save(); },
         async remove(id) { S.sets = S.sets.filter((x) => x.id !== id); save(); },
@@ -170,6 +176,13 @@
           <label for="p-title">Title <small>optional, e.g. Fractions of amounts</small><input id="p-title" maxlength="120" value="${esc(like ? (like.title ? like.title.replace(/ \(version \d+\)$/, '') + ' (version 2)' : '') : '')}"></label>
           ${like ? '' : `<label for="p-text">Paste text <small>a worksheet, notes, questions or a topic list</small><textarea id="p-text" rows="8" maxlength="50000" placeholder="Paste here, or upload files below"></textarea></label>
           <label for="p-files">Or upload files <small>photos, PDF, Word or text files, up to 10 files of 15 MB each</small><input id="p-files" type="file" multiple accept="image/*,application/pdf,.doc,.docx,.txt,.rtf,.odt"></label>`}
+          ${like ? '' : `<fieldset class="kind-pick fit-pick"><legend>Questions</legend>
+            <label class="kind-opt"><input type="radio" name="qmode" value="asis" checked> <b>Use my questions exactly as they are</b><span>Ninegrade keeps every question word for word and only sets it out for the site.</span></label>
+            <label class="kind-opt"><input type="radio" name="qmode" value="new"> <b>Write similar new questions</b><span>Same topics, level and length, with new questions. Good for extra practice.</span></label></fieldset>
+          <details class="panel ans-give"${self ? '' : ' open'}><summary><b>Your answer sheet or mark scheme</b> <small class="muted">optional${self ? '' : `, ${esc(first(st))} never sees it`}</small></summary>
+            <p class="muted small">If you have the answers, add them here. Ninegrade marks with your answers and only fills in any question they don't cover.</p>
+            <label for="p-ans">Paste answers<textarea id="p-ans" rows="4" maxlength="50000" placeholder="e.g. 1. 12  2. 35  3. (a) 4 marks: ..."></textarea></label>
+            <label for="p-ans-files">Or upload them <small>photos, PDF or Word, up to 10 files</small><input id="p-ans-files" type="file" multiple accept="image/*,application/pdf,.doc,.docx,.txt,.rtf,.odt"></label></details>`}
           <label for="p-note">${like ? 'Anything to change?' : 'Instructions'} <small>optional</small><textarea id="p-note" rows="3" maxlength="1000" placeholder="${like ? 'e.g. A bit harder, and more questions on Q3 type' : 'e.g. Foundation tier, 10 questions, focus on the questions he got wrong'}"></textarea></label>
           <div class="row form-row"><label for="p-min">Time to spend <small>minutes, optional</small><input id="p-min" type="number" min="5" max="240" step="5" value="${like && like.minutes ? like.minutes : ''}"></label>
             <label for="p-due">Due date <small>optional</small><input id="p-due" type="date" min="${ctx.today()}"></label></div>
@@ -189,6 +202,8 @@
         const kinds = [...document.querySelectorAll('input[name=kind]:checked')].map((x) => x.value);
         if (!kinds.length) { msg.innerHTML = '<p class="msg err">Tick at least one: Lesson, Quiz, Practice questions or Mock exam.</p>'; return; }
         if (!like && !text && !files.length && note.length < 15) { msg.innerHTML = '<p class="msg err">Paste some text, upload a file, or describe the topic in the instructions.</p>'; return; }
+        const af = like ? [] : [...document.getElementById('p-ans-files').files];
+        if (af.length > 10 || af.some((f) => f.size > 15 * 1024 * 1024)) { msg.innerHTML = '<p class="msg err">Answer files: up to 10 files of 15 MB each.</p>'; return; }
         if (files.length > 10) { msg.innerHTML = '<p class="msg err">Please upload 10 files or fewer.</p>'; return; }
         const big = files.find((f) => f.size > 15 * 1024 * 1024); if (big) { msg.innerHTML = `<p class="msg err">${esc(big.name)} is over 15 MB. Try a smaller photo or split the PDF.</p>`; return; }
         b.disabled = true; b.textContent = files.length ? 'Uploading…' : 'Sending…';
@@ -196,9 +211,14 @@
           let src = like ? like.source_files || [] : []; let up = files;
           const mins = v('p-min') ? Number(v('p-min')) : null;
           const instead = (document.querySelector('input[name=fit]:checked') || {}).value === 'instead';
+          const asIs = !like && (document.querySelector('input[name=qmode]:checked') || {}).value === 'asis';
+          const ansText = v('p-ans'); const ansFiles = like ? [] : [...document.getElementById('p-ans-files').files];
+          let ansPaths = null;
           for (const kind of kinds) {
-            src = await api.create({ student_id: sid, subject: v('p-subj'), kind, title: v('p-title'), source_text: like ? like.source_text || '' : text, source_files: src, note,
-              minutes: kinds.length > 1 && kind === 'quiz' ? null : mins, due_date: v('p-due') || null, based_on: like ? like.id : null, ...(instead ? { replaces_lessons: true } : {}) }, up);
+            const made = await api.create({ student_id: sid, subject: v('p-subj'), kind, title: v('p-title'), source_text: like ? like.source_text || '' : text, source_files: src, note,
+              minutes: kinds.length > 1 && kind === 'quiz' ? null : mins, due_date: v('p-due') || null, based_on: like ? like.id : null, ...(instead ? { replaces_lessons: true } : {}), ...(asIs ? { as_is: true } : {}) }, up);
+            src = made.source_files;
+            if (ansText || ansFiles.length) { if (!ansPaths) ansPaths = await api.upload('answers', ansFiles); await api.addGiven(made.id, ansText, ansPaths); }
             up = []; // files are uploaded once and shared by every set made from them
           }
           ctx.flashText = kinds.length > 1 ? `Sent ${kinds.length} requests (${kinds.map(kindName).join(', ')}). Ninegrade will prepare them at the next evening run, and they will appear under "Ready for you to check".` : 'Sent. Ninegrade will prepare it at the next evening run, and it will appear under "Ready for you to check".';
@@ -271,7 +291,7 @@
             ${(s.quiz || []).length ? `<h3>Quick questions (mark themselves)</h3><ol class="small">${s.quiz.map((q, i) => `<li>${esc(q.q)} <b class="ok-text">→ ${esc(quizKey(s.quiz)[i])}</b></li>`).join('')}</ol>` : ''}</section>` : ''}
           ${!isStudent && s.status !== 'requested' ? `<details class="panel" id="pans"><summary><b>Answer sheet</b> <span class="muted small">(${esc(first(st))} never sees this)</span></summary><div class="lesson answers"><p class="muted">Loading…</p></div></details>` : ''}
           ${!isStudent && atts.length ? `<section class="panel"><h2>${esc(first(st))}'s tries <span class="count">${atts.length}</span></h2><p class="muted small">Ninegrade marks written answers at the evening run. You can also mark or change anything here.</p>${atts.map((a) => attemptHtml(a, s, true)).join('')}</section>` : ''}
-          <details class="panel"><summary><b>What it was made from</b></summary>${s.source_text ? `<div class="answer-text">${esc(s.source_text.slice(0, 3000))}${s.source_text.length > 3000 ? '…' : ''}</div>` : ''}${srcFiles}${s.note ? `<p class="small"><b>Instructions:</b> ${esc(s.note)}</p>` : ''}<p class="small"><b>Weekly lessons:</b> ${s.replaces_lessons ? `instead of some ${esc(s.subject)} lessons` : 'on top of them'}</p>${!s.source_text && !srcFiles && !s.note ? '<p class="muted small">Nothing was given.</p>' : ''}${s.based_on ? `<p class="small"><a href="#pset-${esc(s.based_on)}">See the earlier version</a></p>` : ''}</details></div>`));
+          <details class="panel"><summary><b>What it was made from</b></summary>${s.source_text ? `<div class="answer-text">${esc(s.source_text.slice(0, 3000))}${s.source_text.length > 3000 ? '…' : ''}</div>` : ''}${srcFiles}${s.note ? `<p class="small"><b>Instructions:</b> ${esc(s.note)}</p>` : ''}${s.based_on ? '' : `<p class="small"><b>Questions:</b> ${s.as_is ? 'used exactly as given' : 'similar new questions'}</p>`}${isStudent ? '' : '<div id="pgiven" class="small"></div>'}<p class="small"><b>Weekly lessons:</b> ${s.replaces_lessons ? `instead of some ${esc(s.subject)} lessons` : 'on top of them'}</p>${!s.source_text && !srcFiles && !s.note ? '<p class="muted small">Nothing was given.</p>' : ''}${s.based_on ? `<p class="small"><a href="#pset-${esc(s.based_on)}">See the earlier version</a></p>` : ''}</details></div>`));
         const out = document.getElementById('pact-out');
         const go = async (patch, msg, after) => { try { await api.update(s.id, patch); await refreshCounts(); if (msg) ctx.flashText = msg; after ? after() : setPage(s.id); } catch (x) { out.innerHTML = `<p class="msg err">${esc(nice(x))}</p>`; } };
         app.querySelectorAll('[data-pact]').forEach((b) => { b.onclick = async () => {
@@ -284,6 +304,9 @@
             document.getElementById('pchg-t').focus();
             document.getElementById('pchg').onsubmit = (e) => { e.preventDefault(); const t = 'Changes: ' + document.getElementById('pchg-t').value.trim(); const n = (s.note ? s.note + '\n' : '') + t; go({ status: 'requested', note: n.length > 1000 ? t.slice(0, 1000) : n }, 'Sent. Ninegrade will make the changes at the next evening run.'); }; }
         }; });
+        const gv = document.getElementById('pgiven');
+        if (gv) api.given(s.id).then((g) => { if (!g || (!g.given_text && !(g.given_files || []).length)) return;
+          gv.innerHTML = `<p><b>Your answer sheet</b> (Ninegrade marks with it; ${esc(first(st))} never sees it):</p>${g.given_text ? `<div class="answer-text">${esc(g.given_text.slice(0, 3000))}</div>` : ''}${(g.given_files || []).length ? `<div class="thumbs">${g.given_files.map((f) => `<a data-pfile="${esc(f)}" target="_blank" rel="noopener"><span class="file">${esc(f.split('/').pop())}</span></a>`).join('')}</div>` : ''}`; fileLinks(); }).catch(() => {});
         const det = document.getElementById('pans');
         if (det) det.addEventListener('toggle', async () => { if (det.open && !det.dataset.loaded) { det.dataset.loaded = 1; det.querySelector('.lesson').innerHTML = (await api.answers(s.id).catch(() => null)) || '<p class="muted">No answer sheet for this set.</p>'; } });
         app.querySelectorAll('form[data-pmark]').forEach((f) => { f.onsubmit = async (e) => { e.preventDefault(); const bt = f.querySelector('button'); bt.disabled = true; bt.textContent = 'Saving…';

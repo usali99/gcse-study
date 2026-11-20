@@ -133,3 +133,43 @@ test('subject is a list of the student\'s courses, with "Another subject" to typ
   await expect(page).toHaveURL(/#practice-hadi/);
   await expect(page.locator('.pset-card', { hasText: 'Computer Science' })).toHaveCount(1);
 });
+
+test('parent uploads their own paper with answers: "as it is" and the answers are saved, and Hadi never sees them', async ({ page }) => {
+  await signIn(page, 'usman');
+  await go(page, '#pnew-hadi');
+  await expect(page.locator('input[name=qmode][value=asis]')).toBeChecked();
+  await page.uncheck('input[name=kind][value=quiz]');
+  await page.check('input[name=kind][value=mock]');
+  await page.check('input[name=kind][value=practice]');
+  await page.fill('#p-text', 'Mock A: 1. Find 1/3 of 12. 2. Find 2/5 of 35.');
+  await page.fill('#p-ans', '1. 4 (1 mark)  2. 14 (2 marks)');
+  await page.click('#p-go');
+  await expect(page.locator('#flash')).toContainText('Sent 2 requests');
+  const ids = await page.evaluate(() => { const s = JSON.parse(localStorage.getItem('gcse-v2-practice-demo')); return s.sets.filter((x) => x.as_is).map((x) => [x.id, (s.given || {})[x.id]]); });
+  expect(ids).toHaveLength(2);
+  for (const [, g] of ids) expect(g.given_text).toContain('14 (2 marks)');
+  await go(page, '#pset-' + ids[0][0]);
+  await page.locator('summary', { hasText: 'What it was made from' }).click();
+  await expect(page.locator('body')).toContainText('used exactly as given');
+  await expect(page.locator('#pgiven')).toContainText('14 (2 marks)');
+  // Assign it (pretend the run made it) and check Hadi can't see the answers.
+  await page.evaluate((id) => { const k = 'gcse-v2-practice-demo'; const s = JSON.parse(localStorage.getItem(k)); const x = s.sets.find((y) => y.id === id); x.status = 'assigned'; x.body_html = '<p>1. Find 1/3 of 12.</p>'; localStorage.setItem(k, JSON.stringify(s)); }, ids[0][0]);
+  await page.reload();
+  await signOut(page);
+  await signIn(page, 'hadi');
+  await go(page, '#pset-' + ids[0][0]);
+  await expect(page.locator('body')).toContainText('Find 1/3 of 12');
+  await expect(page.locator('body')).not.toContainText('14 (2 marks)');
+  await expect(page.locator('#pgiven')).toHaveCount(0);
+});
+
+test('"Write similar new questions" is saved as not as-is', async ({ page }) => {
+  await signIn(page, 'usman');
+  await go(page, '#pnew-hadi');
+  await page.check('input[name=qmode][value=new]');
+  await page.fill('#p-text', 'Fractions worksheet');
+  await page.click('#p-go');
+  await expect(page).toHaveURL(/#practice-hadi/);
+  const s = await page.evaluate(() => JSON.parse(localStorage.getItem('gcse-v2-practice-demo')).sets[0]);
+  expect(s.as_is).toBeFalsy();
+});
