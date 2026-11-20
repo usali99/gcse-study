@@ -65,3 +65,26 @@ test('a past lesson with no work shows "Missed, please catch up"', async ({ page
   await go(page, '#lessons');
   await expect(page.locator('.pill.missed').first()).toContainText('Missed, please catch up');
 });
+
+test('All lessons: subject and status filters work together', async ({ page }) => {
+  await go(page, '#lessons');
+  await expect(page.locator('[data-status]')).toContainText(['All', 'To do', 'Missed', 'Done']);
+  await page.click('[data-status=done]');
+  await expect(page.locator('.lesson-card')).toHaveCount(2); // d1 (English) and d3 (Maths) have work sent
+  await page.click('[data-subj=maths]');
+  await expect(page.locator('.lesson-card')).toHaveCount(1);
+  await expect(page.locator('.lesson-card')).toContainText('Percentages');
+  await page.click('[data-status=missed]');
+  await expect(page.locator('.panel')).toContainText('Nothing missed');
+  await noSideScroll(page);
+});
+
+test('All lessons: past weeks are folded with a summary', async ({ page }) => {
+  await page.clock.install({ time: Date.now() + 21 * 864e5 });
+  await go(page, '#lessons');
+  const wk1 = page.locator('details[data-wk="1"]');
+  await expect(wk1).not.toHaveAttribute('open', '');
+  await expect(page.locator('.panel', { has: wk1 })).toContainText(/\d of \d done/);
+  await wk1.locator('summary').click();
+  await expect(wk1.locator('.lesson-card').first()).toBeVisible();
+});

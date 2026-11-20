@@ -440,3 +440,10 @@ details.mw > summary .mw-title { display: flex; flex-wrap: wrap; align-items: ba
 details.mw > summary .mw-title::before { content: "▸"; color: var(--muted); transition: transform .15s; }
 details.mw[open] > summary .mw-title::before { transform: rotate(90deg); }
 details.mw > summary small { font-weight: 400; }
+
+.chips + .chips { margin-top: -8px; }
+.chip.warn:not(.on) span { background: var(--err-bg); color: var(--err); }
+.miss-n { color: var(--err); font-weight: 600; }
+details.wk-fold > summary { cursor: pointer; font-size: .875rem; font-weight: 600; color: var(--ink-2); margin: 4px 0 0; width: max-content; }
+details.wk-fold[open] > summary { margin-bottom: 4px; }
+details.wk-fold:not([open]) .when-open, details.wk-fold[open] .when-closed { display: none; }

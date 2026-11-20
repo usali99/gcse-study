@@ -158,16 +158,34 @@
         ${catchUp.length ? `<section class="panel"><h2>Still to send</h2><p class="muted">These lessons don't have any work sent yet.</p><div class="lesson-list">${catchUp.map((l) => card(l, { date: true })).join('')}</div></section>` : ''}</div>`));
     }
 
+    // Lesson status for the filters: done = work sent, missed = past and not sent, todo = not sent yet.
+    const stateOf = (l) => (prog(l.id).sent ? 'done' : l.lesson_date < today() ? 'missed' : 'todo');
+    let statusPick = 'all';
     function lessonsView() {
-      const admin = role === 'admin'; const weeks = groupBy(D.lessons, (l) => l.week);
+      const admin = role === 'admin';
+      const inSubj = (l) => subjPick === 'all' || l.subject === subjPick;
+      const subjList = D.lessons.filter(inSubj);
+      const sc = { all: subjList.length }; subjList.forEach((l) => { const k = stateOf(l); sc[k] = (sc[k] || 0) + 1; });
+      const shown = subjList.filter((l) => statusPick === 'all' || stateOf(l) === statusPick);
+      const weeks = groupBy(shown, (l) => l.week);
       const nums = Object.keys(weeks).map(Number).sort((a, b) => b - a);
+      const mon = (() => { const d = new Date(today() + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); })();
+      const statusChips = `<div class="chips" role="group" aria-label="Show lessons">${[['all', 'All'], ['todo', 'To do'], ['missed', 'Missed'], ['done', 'Done']].map(([k, t]) => `<button type="button" class="chip ${k === statusPick ? 'on' : ''} ${k === 'missed' && sc.missed ? 'warn' : ''}" data-status="${k}" aria-pressed="${k === statusPick}">${t}<span>${sc[k] || 0}</span></button>`).join('')}</div>`;
+      const emptyMsg = statusPick === 'missed' ? 'Nothing missed. Well done!' : statusPick === 'todo' ? 'Nothing left to do here.' : statusPick === 'done' ? 'No work sent yet.' : 'No lessons yet.';
       shell('lessons', page(`<div class="${admin ? '' : 'narrow'}"><div class="page-head"><p class="kicker dark">${admin ? "Hadi's lessons" : 'Lessons'}</p><h1>${admin ? 'Lessons and approval' : 'All lessons'}</h1>
         ${admin ? '<p class="muted">New weeks arrive as drafts. Open a lesson to read it with its answer sheet, then approve the week to show it to Hadi.</p>' : ''}</div>
-        ${nums.map((w) => { const l = weeks[w]; const draft = l.some((x) => x.status === 'draft'); const days = groupBy(l, (x) => x.lesson_date);
-          return `<section class="panel"><div class="panel-head"><div><h2>Week ${w}</h2><span class="muted small">Starts ${fmtDay(l[0].lesson_date, { day: 'numeric', month: 'long', year: 'numeric' })}</span></div>
+        ${subjChips(subjCounts(D.lessons.map((l) => l.subject)))}${statusChips}
+        ${nums.map((w) => { const l = weeks[w]; const whole = D.lessons.filter((x) => x.week === w); const draft = whole.some((x) => x.status === 'draft'); const days = groupBy(l, (x) => x.lesson_date);
+          const past = whole.every((x) => x.lesson_date < mon); const open = !past || statusPick !== 'all' || (admin && draft);
+          const wl = whole.filter(inSubj); const nDone = wl.filter((x) => stateOf(x) === 'done').length; const nMiss = wl.filter((x) => stateOf(x) === 'missed').length;
+          const summary = `${nDone} of ${wl.length} done${nMiss ? ` · <span class="miss-n">${nMiss} missed</span>` : ''}`;
+          const list = Object.keys(days).sort().map((d) => `<div class="day-group"><h3>${fmtDay(d)}</h3><div class="lesson-list">${days[d].map((x) => card(x)).join('')}</div></div>`).join('');
+          return `<section class="panel"><div class="panel-head"><div><h2>Week ${w}</h2><span class="muted small">Starts ${fmtDay(whole[0].lesson_date, { day: 'numeric', month: 'long', year: 'numeric' })} · ${summary}</span></div>
             ${admin ? `<div class="row">${draft ? '<span class="pill draft">Waiting for your approval</span>' : '<span class="pill done">Live for Hadi</span>'}<button class="btn ${draft ? 'primary' : 'ghost'} sm" data-week="${w}" data-to="${draft ? 'published' : 'draft'}">${draft ? 'Approve and publish' : 'Hide from Hadi'}</button></div>` : ''}</div>
-            ${Object.keys(days).sort().map((d) => `<div class="day-group"><h3>${fmtDay(d)}</h3><div class="lesson-list">${days[d].map((x) => card(x)).join('')}</div></div>`).join('')}</section>`; }).join('') || '<section class="panel"><p class="muted">No lessons yet.</p></section>'}</div>`));
+            <details class="wk-fold" data-wk="${w}" ${open ? 'open' : ''}><summary><span class="when-closed">Show the ${l.length} lesson${l.length > 1 ? 's' : ''}</span><span class="when-open">Hide lessons</span></summary>${list}</details></section>`; }).join('') || `<section class="panel"><p class="muted">${emptyMsg}</p></section>`}</div>`));
       app.querySelectorAll('[data-week]').forEach((b) => { b.onclick = async () => { b.disabled = true; await api.setWeek(Number(b.dataset.week), b.dataset.to); await load(); lessonsView(); }; });
+      app.querySelectorAll('[data-subj]').forEach((b) => { b.onclick = () => { subjPick = b.dataset.subj; lessonsView(); }; });
+      app.querySelectorAll('[data-status]').forEach((b) => { b.onclick = () => { statusPick = b.dataset.status; lessonsView(); }; });
     }
 
     function quizHtml(q, l) {
@@ -311,7 +329,7 @@
       const has = new Set(D.lessons.map((l) => l.subject));
       const keys = ['all', ...Object.keys(SUBJECTS).filter((k) => counts[k] || has.has(k))];
       if (keys.length < 3) return '';
-      return `<div class="chips" role="group" aria-label="Show subject">${keys.map((k) => `<button type="button" class="chip ${k === subjPick ? 'on' : ''}" data-subj="${k}" aria-pressed="${k === subjPick}">${k === 'all' ? 'All' : SUBJECTS[k]}<span>${counts[k] || 0}</span></button>`).join('')}</div>`;
+      return `<div class="chips" role="group" aria-label="Show subject">${keys.map((k) => `<button type="button" class="chip ${k === subjPick ? 'on' : ''}" data-subj="${k}" aria-pressed="${k === subjPick}">${k === 'all' ? 'All subjects' : SUBJECTS[k]}<span>${counts[k] || 0}</span></button>`).join('')}</div>`;
     }
     function subjCounts(list) { const c = { all: list.length }; list.forEach((x) => { c[x] = (c[x] || 0) + 1; }); return c; }
     const subjOf = (lessonId) => (D.byId[lessonId] || {}).subject || '';
