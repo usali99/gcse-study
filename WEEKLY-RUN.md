@@ -1,5 +1,10 @@
 # Weekend run
 
+**Database updates (Usman, 20 Nov 2026):** new `supabase/*.sql` files no longer need the owner to paste them. Tell Usman in
+the thread what the update changes, then apply it with
+`node tools/db.mjs upsert rpc/ng_run_sql "$(jq -Rs '{script: ., label: "<file name>"}' supabase/<file>.sql)"` and confirm it
+returns "ok" (it is logged in `ng_sql_log`). Test it on a local Postgres copy first when it changes permissions.
+
 Instructions for the scheduled Claude session that runs every Saturday. It needs the project folder
 `/mnt/project-files/` and admin access to Supabase. The service key is a network secret in the cloud
 environment (the proxy adds `Authorization: Bearer <key>` for the Supabase host), so `tools/db.mjs`
