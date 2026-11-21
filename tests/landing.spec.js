@@ -19,3 +19,17 @@ test('student sign-up has a "Request an invite" link', async ({ page }) => {
   await page.click('a[href="#request"]');
   await expect(page).toHaveURL(/#request/);
 });
+
+test('good news band on the home page, and a dashboard banner that can be hidden', async ({ page }) => {
+  await go(page, '');
+  await expect(page.locator('.news-band h2')).toHaveText("Upload a mock once. Practise it until it's perfect.");
+  await noSideScroll(page);
+  await go(page, '#signin');
+  await page.click('[data-acct=usman]');
+  await expect(page.locator('#news-strip')).toBeVisible();
+  await page.click('#news-x');
+  await expect(page.locator('#news-strip')).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator('.page-head')).toBeVisible();
+  await expect(page.locator('#news-strip')).toHaveCount(0);
+});

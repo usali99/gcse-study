@@ -372,6 +372,30 @@
       <div class="pg-sub">Weak topics</div><div class="chips"><span class="wchip red">Simultaneous equations</span><span class="wchip amber">Comma splices</span><span class="wchip green">Atomic structure ✓</span></div></div></div>`;
   }
 
+  // ---------- "Good news" for parents and teachers: upload a paper once, practise to perfection (Usman, 21 Nov 2026) ----------
+  function bankNews() {
+    const steps = [['Upload it once', 'Your mock or practice paper, with its answers or mark scheme. Photos, PDF or pasted text. It stays private to your family.'],
+      ['Practise the real questions', 'Pick 5, 10 or all of them, any time, as often as you like. Practice, a timed mock, a quiz or a lesson from the same paper. Marked against your own answers.'],
+      ['Then fresh similar questions', 'Ninegrade writes new questions in the same style and level, with answers, so your child can\'t just remember the last answer.'],
+      ['Repeat until it\'s perfect', 'Ninegrade remembers every question your child got wrong. One press brings back "Ones got wrong before", until every one is right.']];
+    const loop = [['Mock A · original', '6 / 10', 60], ['Ones got wrong before', '8 / 10', 80], ['Similar set 1', '9 / 10', 90], ['Similar set 2', '10 / 10', 100]];
+    return `<section class="band news-band" aria-labelledby="news-h"><div class="news">
+      <div class="news-copy"><p class="news-k"><span class="news-badge">New</span> Good news for parents and teachers</p>
+        <h2 id="news-h">Upload a mock once. Practise it until it's perfect.</h2>
+        <p class="news-lede">Every paper you add is saved question by question in your own question bank. Practise the original questions again and again, then fresh similar ones, until your child gets every question right without thinking twice.</p>
+        <ol class="news-steps">${steps.map(([t, d], i) => `<li><span class="ns-n">${i + 1}</span><span><b>${t}</b><small>${d}</small></span></li>`).join('')}</ol>
+        <ul class="news-ticks"><li>Students never see the answers</li><li>No uploading the same paper twice</li><li>GCSE and 11+</li></ul>
+        <div class="cta">${me ? '<a class="btn accent lg" href="#bank-add">Add your first paper</a>' : '<a class="btn accent lg" href="#signup">Get started</a><a class="btn outline-light lg" href="#request">Request an invite</a>'}</div>
+        <p class="news-fine">Your uploaded papers and answers stay private unless you choose to share them. New questions Ninegrade writes belong to Ninegrade and may help other families too. <a href="#sharing-terms">Sharing and contributions</a></p></div>
+      <div class="news-loop" aria-hidden="true"><p class="nl-h">Example: one child, one paper</p>${loop.map(([t, sc, p], i) => `<div class="nl-row"><span class="nl-i">${i + 1}</span><span class="nl-t"><b>${t}</b><span class="nl-bar"><i style="width:${p}%"></i></span></span><span class="nl-s ${p === 100 ? 'full' : ''}">${sc}</span></div>`).join('')}<p class="nl-foot">★ Perfect score on the same skills</p></div>
+    </div></section>`;
+  }
+  function newsBanner() {
+    if (store.get('ng-news-bank') || !bank.nav().length) return '';
+    return `<section class="panel news-strip" id="news-strip"><span class="news-badge">New</span><div><b>Upload a mock once, practise it until it's perfect.</b><span class="muted small">Save a paper with its answers, practise the real questions as often as you like, then fresh similar ones, until every answer is right.</span></div><div class="row"><a class="btn primary sm" href="#bank-add">Add a paper</a><button class="btn ghost sm" id="news-x" aria-label="Hide this message">Hide</button></div></section>`;
+  }
+  function wireNews() { const x = document.getElementById('news-x'); if (x) x.onclick = () => { store.set('ng-news-bank', 1); document.getElementById('news-strip').remove(); }; }
+
   // ---------- landing ----------
   function landing() {
     const sample = C.buildPlan({ start: today(), exam: C.examSeries(today())[2].date, topics: C.topicsFor(C.SPECS[0], 'Foundation'), hoursPerWeek: 2 }).filter((w) => w.kind !== 'break').slice(0, 5);
@@ -392,6 +416,7 @@
       </div></section>
       ${page(`
       <div class="trust-strip"><span><b>5</b> exam boards</span><span><b>${C.SPECS.filter((x) => x.track === 'gcse').length}</b> GCSE specifications</span><span><b>11+</b> Kent, GL, CSSE and ISEB</span><span><b>&lt; 1 min</b> to build a plan</span></div>
+      ${bankNews()}
       <section class="band tracks-band"><h2 class="section-title">Two tracks, one place</h2><div class="roles tracks">
         <article class="role role-teacher"><h3>GCSE</h3><p>Edexcel, AQA, OCR, Eduqas and Cambridge. Maths, English, the sciences and more, Foundation or Higher, planned to the exam series.</p></article>
         <article class="role role-parent"><h3>11+</h3><p>Maths, English, verbal reasoning and non-verbal reasoning for the Kent Test, GL Assessment, CSSE and ISEB, planned to the September test date in Year 6.</p></article></div></section>
@@ -941,9 +966,10 @@
   }
   function parentHome() {
     const kids = childrenOf(me.id);
-    shell('home', page(`${head(kids.length ? `You manage ${kids.length} ${kids.length === 1 ? 'child' : 'children'}.` : '')}
+    shell('home', page(`${head(kids.length ? `You manage ${kids.length} ${kids.length === 1 ? 'child' : 'children'}.` : '')}${newsBanner()}
       ${kids.map(childCard).join('') || '<section class="panel"><div class="empty"><b>Add your child</b><span>Make a code on the Invite codes page. Your child signs up with it and appears here.</span><a class="btn primary sm" href="#add-child">Add your child</a></div></section>'}
       ${kids.length ? `<section class="panel slim"><div class="panel-head"><div><h2>Add another child</h2><p class="muted small">Create a login for them, with or without an email.</p></div><a class="btn ghost sm" href="#add-child">Add a child</a></div></section>` : ''}`));
+    wireNews();
     app.querySelectorAll('[data-ctrack]').forEach((b) => { b.onclick = async () => {
       if (!b.dataset.sure) { b.dataset.sure = 1; b.textContent = `Press again to switch to ${TR[b.dataset.to]} (courses already made stay)`; return; }
       b.disabled = true; try { await api.setChildTrack(b.dataset.ctrack, b.dataset.to); await load(); parentHome(); } catch (x) { b.disabled = false; b.textContent = x.message; } }; });
@@ -959,13 +985,14 @@
   function teacherHome() {
     const mine = D.classes.filter((c) => c.teacher_id === me.id);
     const school = mySchool();
-    shell('home', page(`${head(school ? esc(school.name) : 'Independent teacher')}
+    shell('home', page(`${head(school ? esc(school.name) : 'Independent teacher')}${newsBanner()}
       <section class="panel"><div class="panel-head"><h2>My classes</h2></div>
         ${mine.map((c) => { const st = classStudents(c.id); return `<article class="class-card"><div class="pc-head"><div><h3>${esc(c.name)}</h3><span class="muted small">${st.length} student${st.length === 1 ? '' : 's'}</span></div><a class="btn ghost sm" href="#invites">Invite students</a></div>
           ${st.length ? `<div class="scroll-x"><table class="data"><thead><tr><th>Student</th><th>Courses</th><th>This week</th><th></th></tr></thead><tbody>${st.map((s) => { const cs = coursesOf(s.id); return `<tr><td><b>${esc(s.full_name)}</b></td><td>${cs.map((x) => esc(x.subject)).join(', ') || '<span class="muted">None</span>'}</td><td class="small">${cs.map((x) => { const w = thisWeek(x); return w ? esc(w.title) : ''; }).filter(Boolean).slice(0, 2).join('<br>') || '–'}</td><td><a class="btn primary xs" href="#plan-for-${esc(s.id)}">Add course</a></td></tr>`; }).join('')}</tbody></table></div>` : '<p class="muted small">No students yet. Make a class code on the Invite codes page and share it.</p>'}</article>`; }).join('') || '<div class="empty"><b>No classes yet</b><span>Create your first class below.</span></div>'}
         <form id="newclass" class="row form-row"><label for="cname">New class name<input id="cname" required maxlength="60" placeholder="e.g. 10X Maths"></label><button class="btn primary">Create class</button></form>
       </section>
       ${D.courses.length ? `<section class="panel"><h2>All your students' courses</h2><div class="course-grid">${D.courses.filter((c) => c.student_id !== me.id).map((c) => courseCard(c, true)).join('')}</div></section>` : ''}`));
+    wireNews();
     document.getElementById('newclass').onsubmit = async (e) => {
       e.preventDefault();
       try { await api.addClass({ name: document.getElementById('cname').value.trim(), teacher_id: me.id, school_id: school ? school.id : null }); await load(); teacherHome(); }
