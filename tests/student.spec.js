@@ -88,3 +88,24 @@ test('All lessons: past weeks are folded with a summary', async ({ page }) => {
   await wk1.locator('summary').click();
   await expect(wk1.locator('.lesson-card').first()).toBeVisible();
 });
+
+test('Write it from memory: covers the Learn it notes, counts words, nothing kept after closing', async ({ page }) => {
+  await go(page, '#lesson-d2');
+  await expect(page.locator('#memo')).toBeHidden();
+  await page.click('#memo-open');
+  await expect(page.locator('#memo')).toBeVisible();
+  await expect(page.locator('.learn-zone')).toHaveClass(/covered/);
+  await page.fill('.memo-text', 'Split long sentences at commas');
+  await expect(page.locator('.memo-count')).toHaveText('5 words');
+  await page.click('.memo-cover');
+  await expect(page.locator('.learn-zone')).not.toHaveClass(/covered/);
+  await page.click('.memo-clear');
+  await expect(page.locator('.memo-text')).toHaveValue('');
+  await page.fill('.memo-text', 'again');
+  await page.click('.memo-x');
+  await expect(page.locator('#memo')).toBeHidden();
+  await expect(page.locator('.learn-zone')).not.toHaveClass(/covered/);
+  await page.click('.memo-inline');
+  await expect(page.locator('.memo-text')).toHaveValue('');
+  await noSideScroll(page);
+});

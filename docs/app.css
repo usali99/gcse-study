@@ -570,3 +570,21 @@ table.acc td { vertical-align: middle; }
 .ck-fix { grid-column: 1 / -1; border-top: 1px dashed var(--line, #dde); padding-top: .6rem; }
 .ck-left { color: #b26a00; }
 @media (max-width: 760px) { .ck-row { grid-template-columns: 1fr; } }
+
+/* Write it from memory */
+.memo-open-row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: .6rem 0; }
+.memo-inline { margin-left: .6rem; vertical-align: middle; font-size: .75rem; }
+.learn-zone { transition: filter .2s; }
+.learn-zone.covered { filter: blur(7px); user-select: none; cursor: pointer; position: relative; }
+.memo { position: fixed; right: 24px; bottom: 24px; width: 420px; max-width: calc(100vw - 32px); z-index: 60; background: var(--card, #fff); border: 1px solid var(--line, #dde); border-radius: 14px; box-shadow: 0 14px 40px rgba(20,30,60,.22); display: flex; flex-direction: column; resize: both; overflow: hidden; min-width: 280px; min-height: 220px; height: 340px; }
+.memo[hidden] { display: none; }
+.memo-head { display: flex; align-items: center; gap: .5rem; padding: .55rem .8rem; background: #f2b33d; color: #1d2240; cursor: move; touch-action: none; user-select: none; }
+.memo-head b { flex: 1; font-size: .92rem; }
+.memo-grip { opacity: .6; }
+.memo-x { border: 0; background: transparent; font-size: 1rem; cursor: pointer; color: inherit; padding: .1rem .3rem; }
+.memo-text { flex: 1; border: 0; resize: none; padding: .8rem; font: inherit; font-size: 1rem; line-height: 1.5; outline: none; background: transparent; color: inherit; min-height: 80px; }
+.memo-foot { display: flex; justify-content: space-between; align-items: center; gap: .5rem; padding: .45rem .8rem; border-top: 1px solid var(--line, #dde); }
+.memo-btns { display: flex; gap: .4rem; }
+.memo-note { margin: 0; padding: 0 .8rem .5rem; font-size: .75rem; }
+.memo.dragging { opacity: .92; }
+@media (max-width: 600px) { .memo { left: 8px !important; right: 8px !important; top: auto !important; bottom: 8px; width: auto; max-width: none; height: 46vh; resize: none; } .memo-head { cursor: default; } .memo-grip { display: none; } }
