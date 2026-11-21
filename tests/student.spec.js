@@ -127,6 +127,16 @@ test('Rough paper: draw, undo, type, and add the page to the photos', async ({ p
   await page.click('.rough-add');
   await expect(page.locator('.rough-add')).toHaveText('✔ Added');
   expect(await page.locator('#photos').evaluate((i) => [...i.files].map((f) => f.name))).toEqual(['rough-paper-1.png']);
+  await expect(page.locator('.fc')).toHaveCount(1);
+  await page.click('#rough .memo-x');
+  await page.click('.fc-see'); // open it to check before sending
+  await expect(page.locator('.fc-view img')).toBeVisible();
+  await page.click('.fc-view-x');
+  await expect(page.locator('.fc-view')).toHaveCount(0);
+  await page.click('.fc-x');
+  await expect(page.locator('.fc')).toHaveCount(0);
+  expect(await page.locator('#photos').evaluate((i) => i.files.length)).toBe(0);
+  await page.click('#rough-open');
   await page.locator('#answer').focus(); // rough paper stays open while answering
   await expect(page.locator('#rough')).toBeVisible();
   await page.click('#rough .memo-x');

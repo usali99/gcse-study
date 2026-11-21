@@ -2,8 +2,30 @@
 // student presses "Add to my answers", which attaches a picture of the page to the photos box of the form.
 (function () {
   const COLS = { ink: '#1d2240', blue: '#2457c5', red: '#c62828' };
+  // A list of the files in a photos box, each with a small × to take it out again.
+  window.ngFileChips = function (input) {
+    if (!input || input.dataset.chips) return; input.dataset.chips = '1';
+    const box = document.createElement('div'); box.className = 'file-chips'; input.after(box);
+    const urls = [];
+    const draw = () => { urls.splice(0).forEach((u) => URL.revokeObjectURL(u)); const fs = [...(input.files || [])];
+      box.innerHTML = fs.map((f, i) => { const img = /^image\//.test(f.type) ? (urls.push(URL.createObjectURL(f)), `<img src="${urls[urls.length - 1]}" alt="">`) : '<span class="fc-doc">📄</span>';
+        return `<span class="fc"><button type="button" class="fc-see" data-fv="${i}" title="Open to check it">${img}<span class="fc-name">${f.name.replace(/[<>&"]/g, '')}</span></button><button type="button" class="fc-x" data-fc="${i}" aria-label="Remove ${f.name.replace(/[<>&"]/g, '')}">×</button></span>`; }).join(''); };
+    const view = (f) => { const u = URL.createObjectURL(f);
+      if (!/^image\//.test(f.type)) { window.open(u, '_blank'); return; }
+      const v = document.createElement('div'); v.className = 'fc-view'; v.setAttribute('role', 'dialog'); v.setAttribute('aria-label', f.name);
+      v.innerHTML = `<div class="fc-view-in"><div class="fc-view-head"><b></b><button type="button" class="fc-view-x" aria-label="Close">✕ Close</button></div><img alt=""></div>`;
+      v.querySelector('b').textContent = f.name; v.querySelector('img').src = u; document.body.appendChild(v);
+      const shut = () => { v.remove(); URL.revokeObjectURL(u); document.removeEventListener('keydown', esc); }; const esc = (e) => { if (e.key === 'Escape') shut(); };
+      v.addEventListener('click', (e) => { if (e.target === v || e.target.closest('.fc-view-x')) shut(); }); document.addEventListener('keydown', esc); v.querySelector('.fc-view-x').focus(); };
+    box.addEventListener('click', (e) => { const sv = e.target.closest('[data-fv]'); if (sv) { view(input.files[Number(sv.dataset.fv)]); return; }
+      const b = e.target.closest('[data-fc]'); if (!b) return; const n = Number(b.dataset.fc);
+      try { const dt = new DataTransfer(); [...input.files].forEach((f, i) => { if (i !== n) dt.items.add(f); }); input.files = dt.files; } catch (x) { input.value = ''; }
+      input.dispatchEvent(new Event('change', { bubbles: true })); });
+    input.addEventListener('change', draw); draw();
+  };
   window.ngRough = function (open, photos) {
     if (!open) return;
+    if (photos) window.ngFileChips(photos);
     const old = document.getElementById('rough'); if (old) old.remove();
     const w = document.createElement('div'); w.id = 'rough'; w.className = 'memo rough'; w.hidden = true; w.setAttribute('role', 'dialog'); w.setAttribute('aria-label', 'Rough paper');
     w.innerHTML = `<div class="memo-head" title="Drag to move"><b>✏️ Rough paper</b><span class="memo-grip" aria-hidden="true">⠿</span><button type="button" class="memo-x" aria-label="Close">✕</button></div>
