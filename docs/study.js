@@ -289,7 +289,7 @@
         <p class="memo-open-row"><button type="button" class="btn ghost sm" id="memo-open">✍ Write it from memory</button> <span class="muted small">Cover the notes and write what you remember. Nothing is saved.</span></p>
         <p class="report-row">Spotted a mistake in this lesson? ${report({ place: 'lesson', ref: l.id, context: l.title })}</p>
         ${admin ? hadiWork(l) + '<section class="panel"><details class="other"><summary>Answer sheet for this lesson (only parents see this)</summary><p class="muted small">The right answers and marking guide. Ninegrade uses it to mark Hadi\'s work, and you can use it to check a mark.</p><div class="lesson answers" id="answer-sheet"><p class="muted">Loading the answer sheet…</p></div></details></section>' : `
-        <section class="panel" id="send"><h2>Send your work</h2>${p.subs.map((s) => subView(s)).join('')}
+        <section class="panel" id="send"><div class="panel-head"><h2>Send your work</h2><button type="button" class="btn ghost sm" id="rough-open">✏️ Rough paper</button></div>${p.subs.map((s) => subView(s)).join('')}
           <p class="muted">${p.marked ? 'Want to send a better answer after reading the feedback? Type it below and press Send again.' : p.sent ? 'Spotted a mistake, or want to add something? Type the new or extra answer below and press <b>Send again</b>. Everything you send for this lesson is marked together.' : 'The Your turn questions are already in the box below. Type each answer after <b>Answer:</b>, or take photos of your page. Then press Send.'}</p>
           <form id="sendform" class="form">
             <label for="answer">Your answers<textarea id="answer" rows="14" placeholder="Q1&#10;1. ...&#10;2. ..."></textarea></label>
@@ -318,7 +318,7 @@
           if (!admin) { try { await api.addAttempt({ lesson_id: id, ...r }); D.attempts.unshift({ lesson_id: id, ...r, created_at: new Date().toISOString() }); } catch (x) { document.getElementById('quiz-score').textContent += ' (score not saved: ' + x.message + ')'; } } };
       }
       if (admin) { thumbs(); const sheet = await api.answerSheet(id).catch(() => null); document.getElementById('answer-sheet').innerHTML = sheet || '<p class="muted">No answer sheet for this lesson.</p>'; return; }
-      thumbs(); window.ngMemoPad(document.getElementById('lesson-body'), document.getElementById('memo-open'), document.getElementById('answer'));
+      thumbs(); window.ngMemoPad(document.getElementById('lesson-body'), document.getElementById('memo-open'), document.getElementById('answer')); if (window.ngRough) window.ngRough(document.getElementById('rough-open'), document.getElementById('photos'));
       // Pre-fill the answer box with the "Your turn" questions, so Hadi can answer under each one.
       function answerTemplate() {
         const body = document.getElementById('lesson-body'); if (!body) return '';

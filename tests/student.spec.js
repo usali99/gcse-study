@@ -115,3 +115,21 @@ test('Write it from memory: covers the Learn it notes, counts words, nothing kep
   await expect(page.locator('.memo-text')).toHaveValue('');
   await noSideScroll(page);
 });
+
+test('Rough paper: draw, undo, type, and add the page to the photos', async ({ page }) => {
+  await go(page, '#lesson-d2');
+  await page.click('#rough-open');
+  await expect(page.locator('#rough')).toBeVisible();
+  const box = await page.locator('#rough canvas').boundingBox();
+  await page.mouse.move(box.x + 30, box.y + 30); await page.mouse.down(); await page.mouse.move(box.x + 120, box.y + 80, { steps: 5 }); await page.mouse.up();
+  await page.click('#rough [data-tool=type]');
+  await page.fill('.rough-text', '15% of 300 = 45');
+  await page.click('.rough-add');
+  await expect(page.locator('.rough-add')).toHaveText('✔ Added');
+  expect(await page.locator('#photos').evaluate((i) => [...i.files].map((f) => f.name))).toEqual(['rough-paper-1.png']);
+  await page.locator('#answer').focus(); // rough paper stays open while answering
+  await expect(page.locator('#rough')).toBeVisible();
+  await page.click('#rough .memo-x');
+  await expect(page.locator('#rough')).toBeHidden();
+  await noSideScroll(page);
+});

@@ -331,7 +331,7 @@
       shell('practice', page(`<div class="narrow">${head}
         ${staff ? `<section class="panel slim"><div class="row"><a class="btn ghost sm" href="#plike-${esc(s.id)}">Make another like this</a><button class="btn ghost sm" data-pown="draft">Take it back</button><button class="btn ghost sm" data-pown="archived">Archive</button></div></section>` : ''}
         <article class="panel lesson" id="plesson-body">${s.body_html || ''}${s.kind === 'lesson' ? '<p class="memo-open-row"><button type="button" class="btn ghost sm" id="memo-open">✍ Write it from memory</button> <span class="muted small">Cover the notes and write what you remember. Nothing is saved.</span></p>' : ''}</article>
-        <section class="panel" id="psend"><h2>${atts.length ? 'Have another go' : 'Your answers'}</h2>
+        <section class="panel" id="psend"><div class="panel-head"><h2>${atts.length ? 'Have another go' : 'Your answers'}</h2><button type="button" class="btn ghost sm" id="rough-open">✏️ Rough paper</button></div>
           ${s.minutes && s.kind === 'mock' ? `<p class="msg info">Mock exam: give yourself ${s.minutes} minutes. The timer started when you opened this page.</p>` : ''}
           <form id="pwork" class="form">${quiz.length ? quizHtml(quiz) : ''}
             ${written ? `<label for="pw-ans">Your written answers <small>number each answer, e.g. 1. …</small><textarea id="pw-ans" rows="10" maxlength="20000"></textarea></label>
@@ -339,6 +339,7 @@
             <label for="pw-min" class="narrow-field">Minutes taken<input id="pw-min" type="number" min="0" max="600"></label>
             <div id="pw-msg"></div><button class="btn primary lg" id="pw-go">${quiz.length && !written ? 'Check my answers' : 'Send'}</button></form></section>
         ${atts.length ? `<section class="panel"><h2>Your tries</h2>${atts.map((a) => attemptHtml(a, s, false)).join('')}</section>` : ''}</div>`));
+      if (window.ngRough) window.ngRough(document.getElementById('rough-open'), document.getElementById('pw-photos'));
       if (s.kind === 'lesson' && window.ngMemoPad) window.ngMemoPad(document.getElementById('plesson-body'), document.getElementById('memo-open'), document.getElementById('pw-ans'));
       app.querySelectorAll('[data-pown]').forEach((b) => { b.onclick = async () => { try { await api.update(s.id, { status: b.dataset.pown }); location.hash = '#practice'; } catch (x) { alert(nice(x)); } }; });
       const started = Date.now(); const minEl = document.getElementById('pw-min');
