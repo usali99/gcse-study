@@ -289,7 +289,8 @@
     const nav = navFor();
     // Only the everyday tabs sit on the bar. Everything else (Invite codes, Exam boards, owner pages and any new tab
     // added later) goes under "More", so the bar never needs scrolling (Usman, 20 Nov 2026).
-    const MAIN = ['home', 'today', 'lessons', 'progress', 'marking', 'topics', 'practice'];
+    // The owner's bar also shows Question bank, Invite codes and Everyone (Usman, 21 Nov 2026).
+    const MAIN = ['home', 'today', 'lessons', 'progress', 'marking', 'topics', 'practice', ...(me && me.is_platform_admin ? ['bank', 'invites', 'everyone'] : [])];
     const main = nav.filter(([r]) => MAIN.includes(r)); const more = nav.filter(([r]) => !MAIN.includes(r));
     const moreBadge = more.some(([, t]) => t.includes('class="count"')) ? ` <span class="count">${(more.map(([, t]) => (t.match(/class="count">(\d+)/) || [])[1]).filter(Boolean).reduce((a, b) => a + Number(b), 0))}</span>` : '';
     const navHtml = `${main.map(([r, t]) => `<a href="#${r}" ${route === r ? 'aria-current="page"' : ''}>${t}</a>`).join('')}${more.length ? `<details class="nav-more"><summary ${more.some(([r]) => r === route) ? 'aria-current="page"' : ''}>More${moreBadge}<span class="caret" aria-hidden="true">▾</span></summary><div class="more-menu" role="menu">${more.map(([r, t]) => `<a role="menuitem" href="#${r}" ${route === r ? 'aria-current="page"' : ''}>${t}</a>`).join('')}</div></details>` : ''}`;
