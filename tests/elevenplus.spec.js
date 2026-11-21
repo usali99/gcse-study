@@ -66,7 +66,8 @@ test('a parent offers a paper to the Ninegrade bank; a bank manager approves it'
   await expect(page).toHaveURL(/#bank-bp\d+/);
   const id = page.url().split('#bank-')[1];
   await page.evaluate((pid) => { const k = 'gcse-v2-bank-demo'; const S = JSON.parse(localStorage.getItem(k)); const p = S.papers.find((x) => x.id === pid); p.status = 'ready';
-    S.questions.push({ id: pid + '-q1', paper_id: pid, position: 1, num: '1', section: '', question: 'Find the hidden word.', marks: 1, topic: 'Hidden words', answer: 'cat' }); localStorage.setItem(k, JSON.stringify(S)); }, id);
+    S.questions.push({ id: pid + '-q1', paper_id: pid, position: 1, num: '1', section: '', question: 'Find the hidden word.', marks: 1, topic: 'Hidden words', answer: 'cat' },
+      { id: pid + '-q2', paper_id: pid, position: 2, num: '2', section: '', question: 'Opposite of tall.', marks: 1, topic: 'Antonyms', answer: '' }); localStorage.setItem(k, JSON.stringify(S)); }, id);
   await page.reload();
   await page.click('#boffer');
   await expect(page.locator('#bo-msg')).toContainText('Tick the box');
@@ -79,6 +80,23 @@ test('a parent offers a paper to the Ninegrade bank; a bank manager approves it'
   await expect(page.locator('.panel', { hasText: 'Offered by parents' })).toContainText('Priya VR set');
   await page.click(`a[href="#bank-${id}"]`);
   await expect(page.locator('.review-box')).toContainText('Priya Shah');
+  // check question by question: the one with no answer is at the top
+  await expect(page.locator('.ck-count')).toContainText('0 of 2 checked');
+  await expect(page.locator('.ck-row').first()).toContainText('No answer uploaded');
+  await expect(page.locator('[data-rv=approve]')).toBeDisabled();
+  await page.click('[data-rv=decline]');
+  await expect(page.locator('#rv-msg')).toContainText('Add a short reason');
+  await page.locator('.ck-row').first().locator('[data-ck-no]').click();
+  await page.locator('.ck-row').first().locator('[data-ck-form] button.primary').click();
+  await expect(page.locator('.ck-row').first()).toContainText('Type the correct answer');
+  await page.locator('.ck-row').first().locator('.ck-ans').fill('short');
+  await page.locator('.ck-row').first().locator('[data-ck-form] button.primary').click();
+  await expect(page.locator('.ck-count')).toContainText('1 of 2 checked');
+  await expect(page.locator('.ck-row', { hasText: 'Opposite of tall' })).toContainText('Corrected');
+  await page.locator('.ck-row', { hasText: 'hidden word' }).locator('[data-ck-yes]').click();
+  await expect(page.locator('.ck-count')).toContainText('2 of 2 checked');
+  await expect(page.locator('.ck-corr')).toContainText('Q2 answer');
+  await noSideScroll(page);
   await page.click('[data-rv=approve]');
   await expect(page.locator('.page-head')).toContainText('contributed by Priya Shah');
   await expect(page.locator('#bdel')).toHaveCount(0); // only the owner deletes Ninegrade papers

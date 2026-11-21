@@ -249,6 +249,11 @@ Parents and teachers add papers straight to the bank ("Add a paper"). For every 
    `added_by` person's folder. Split them the same way. `track` is `gcse` or `elevenplus`: for 11+ (Maths, English,
    Verbal reasoning, Non-verbal reasoning) use 11+ style topics (e.g. "Synonyms", "Number series", "Matrices"). For
    non-verbal reasoning pictures, describe each shape in words until bank questions take pictures (stage 4).
+6. Doubtful questions (v2-bank-review.sql): when splitting, set `bank_questions.flag` (max 200 characters) on any
+   question a checker should look at closely, e.g. "No answer given", "Answer added by Ninegrade", "Answer looks wrong:
+   says 12, working gives 14", "Couldn't read the scan here", "Diagram described in words". Leave `check_state` as ''
+   (the owner or a bank manager checks each question on the site before a paper joins the Ninegrade bank; a run never
+   sets `check_state` and never approves). Never change the parent's answer because it looks wrong: flag it instead.
 
 ### Ninegrade bank and 11+ (v2-elevenplus.sql)
 - `people.tracks` (gcse / elevenplus) decides what each parent sees; a child has one track. Changes only through the

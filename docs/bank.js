@@ -57,6 +57,9 @@
         async offer(pid, offer, permission, note) { return must(await sb.rpc('v2_bank_offer', { pid, offer, permission, offer_note: note || '' })); },
         async review(pid, decision, note) { return must(await sb.rpc('v2_bank_review', { pid, decision, review_text: note || '' })); },
         async resubmit(pid) { return must(await sb.rpc('v2_bank_resubmit', { pid })); },
+        async check(qid, ok, answer, question, marks) { return must(await sb.rpc('v2_bank_check', { qid, ok, new_answer: answer ?? null, new_question: question ?? null, new_marks: marks ?? null })); },
+        async corrections(pid) { const r = await sb.from('bank_corrections').select('*').eq('paper_id', pid).order('created_at', { ascending: false }); return r.error ? [] : r.data; },
+        async fileUrl(path) { const r = await sb.storage.from('practice').createSignedUrl(path, 3600); return r.error ? null : r.data.signedUrl; },
         async names(ids) { if (!ids.length) return []; const r = await sb.rpc('v2_bank_names', { ids }); return r.error ? [] : r.data; },
         async addPaper(p, qFiles, aFiles) {
           const up = async (tag, files) => { const out = []; const ts = Date.now();
@@ -129,13 +132,24 @@
         async offer(pid, offer, permission, note) { const p = P(pid); if (!p || !mine(p)) throw new Error('You can only offer your own papers.');
           if (offer && !permission) throw new Error('Tick the box to confirm you wrote this paper or have permission, and that Ninegrade may keep and share it.');
           if (offer && p.status && p.status !== 'ready') throw new Error('Wait until the paper has been added, then offer it.');
-          p.review = offer ? 'offered' : ''; if (offer) { p.permission_confirmed = true; p.review_note = note || ''; } save(); return p.review; },
+          p.review = offer ? 'offered' : ''; if (offer) { p.permission_confirmed = true; p.review_note = note || '';  S.questions.filter((x) => x.paper_id === pid).forEach((x) => { x.check_state = ''; }); } save(); return p.review; },
         async review(pid, decision, note) { const p = P(pid); if (!staff()) throw new Error('Only the site owner and bank managers decide on Ninegrade bank papers.');
           if (['exam_board', 'publisher'].includes(p.origin) && decision === 'approve' && !admin()) throw new Error("Exam board and publisher papers need the site owner's approval.");
+          const left = S.questions.filter((x) => x.paper_id === pid && !x.check_state).length;
+          if (decision === 'approve' && left) throw new Error(`Check every question first (${left} still to check).`);
+          if (decision !== 'approve' && !(note || '').trim()) throw new Error('Add a short reason, so they know what to change.');
           if (p.collection !== 'ninegrade' && p.review === 'offered') { if (decision === 'approve') Object.assign(p, { collection: 'ninegrade', contributed_by: p.owner_id, owner_id: null, review: '', sharing: 'private', share_code: null, review_note: note || '' }); else Object.assign(p, { review: decision === 'changes' ? 'changes' : 'declined', review_note: note || '' }); }
           else if (p.collection === 'ninegrade') { if (!admin()) throw new Error('The site owner decides on this paper.'); p.review = decision === 'approve' ? '' : decision === 'changes' ? 'changes' : 'declined'; p.review_note = note || ''; }
           else throw new Error("This paper isn't waiting for a decision."); save(); return decision; },
         async resubmit(pid) { const p = P(pid); p.review = admin() ? '' : 'pending'; save(); return p.review; },
+        async check(qid, ok, answer, question, marks) { const x = S.questions.find((y) => y.id === qid); if (!x || !staff()) throw new Error('Only the site owner and bank managers check papers waiting for approval.');
+          if (ok === null) { x.check_state = ''; } else if (ok) { x.check_state = 'ok'; x.checked_by = me().id; } else {
+            const ch = []; if (answer && answer.trim() && answer.trim() !== x.answer) ch.push(['answer', x.answer, answer.trim()]); if (question && question.trim() && question.trim() !== x.question) ch.push(['question', x.question, question.trim()]); if (marks != null && marks !== x.marks) ch.push(['marks', String(x.marks), String(marks)]);
+            if (!ch.length) throw new Error('Type the correct answer (or fix the question or marks) first.');
+            S.corrections = S.corrections || []; ch.forEach(([f, o, n]) => { S.corrections.unshift({ id: Date.now() + f, paper_id: x.paper_id, question_id: qid, field: f, old_value: o, new_value: n, done_by: me().id, created_at: new Date().toISOString() }); x[f] = f === 'marks' ? Number(n) : n; });
+            x.check_state = 'fixed'; x.checked_by = me().id; x.flag = ''; } save(); return x.check_state; },
+        async corrections(pid) { return (S.corrections || []).filter((c) => c.paper_id === pid); },
+        async fileUrl() { return null; },
         async names(ids) { return (ctx.D().people || []).filter((x) => ids.includes(x.id)).map((x) => ({ id: x.id, full_name: x.full_name })); },
         async addPaper(x, qFiles, aFiles) { if (!isUser()) throw new Error('Only parents and teachers can use the question bank.');
           if (x.collection === 'ninegrade' && !staff()) throw new Error('Only the site owner and bank managers add to the Ninegrade bank.');
@@ -260,7 +274,6 @@
       const kidName = pick.sid ? esc(first(ctx.person(pick.sid))) : '';
       shell('bank', page(`<div class="narrow"><div class="page-head"><a class="small" href="#bank">← Question bank</a><p class="kicker dark">${esc(p.subject)}</p><h1>${esc(p.title)}</h1>
         <p class="muted">${qs.length} questions · ${total} marks${p.kind === 'similar' ? '' : p.origin ? ` · ${esc(ORIGIN[p.origin] || '')}` : ''}${mineP ? '' : isNg(p) ? ` · Ninegrade ${TR[p.track || 'gcse']} bank${p.contributed_by ? ` · contributed by ${nm(p.contributed_by)}` : ''}` : ' · shared with you'}</p>${kindLine}</div><div id="flash"></div>
-        ${reviewBox(p)}
         ${kids.length && qs.length ? `<section class="panel" id="bmake"><h2>Make practice now</h2>
           <form id="bform" class="form">
             ${kids.length > 1 ? `<label for="b-kid">For<select id="b-kid">${kids.map((k) => `<option value="${esc(k.id)}" ${k.id === pick.sid ? 'selected' : ''}>${esc(k.full_name)}</option>`).join('')}</select></label>` : ''}
@@ -279,14 +292,15 @@
             <p class="small" id="b-preview" aria-live="polite"></p><div id="b-msg"></div>
             <button class="btn primary lg" id="b-go">${LATER.includes(pick.kind) ? 'Send to Ninegrade' : 'Make it now'}</button>
             <p class="muted small" id="b-when">${LATER.includes(pick.kind) ? 'Ready to check after the next evening run.' : "It's ready straight away to check and assign."} Ninegrade marks ${kidName}'s answers against this paper's answers.</p></form></section>` : kids.length ? '' : '<section class="panel"><p class="muted">Link a child or a class first to make practice from the bank.</p></section>'}
-        <section class="panel"><div class="panel-head"><h2>Questions</h2>${kidName ? `<span class="muted small">Status for ${kidName}</span>` : ''}</div>
+        ${checking(p) ? checkPanel(p, qs, ansOf) : `<section class="panel"><div class="panel-head"><h2>Questions</h2>${kidName ? `<span class="muted small">Status for ${kidName}</span>` : ''}</div>
           <ol class="bank-list">${qs.map((q) => `<li class="bank-q" data-q="${esc(q.id)}"><label class="bq-pick" ${pick.mode === 'pick' ? '' : 'hidden'}><input type="checkbox" value="${esc(q.id)}" aria-label="Use question ${esc(q.num)}"></label>
             <div class="bq-body"><div class="bq-top"><b>${esc(q.num)}</b>${q.topic ? `<span class="tag">${esc(q.topic)}</span>` : ''}<span class="muted small">${q.marks} mark${q.marks === 1 ? '' : 's'}</span>${kidName ? stat(q) : ''}</div>
             <div class="bq-text">${esc(q.question).replace(/\n/g, '<br>')}</div>
             <details class="bq-ans"><summary class="small">Answer</summary><div class="small">${esc(ansOf(q)).replace(/\n/g, '<br>') || '<span class="muted">No answer saved.</span>'}</div></details>
-            ${owner ? `<button type="button" class="btn ghost xs" data-bedit="${esc(q.id)}">Edit</button>` : ''}</div></li>`).join('')}</ol></section>
+            ${owner ? `<button type="button" class="btn ghost xs" data-bedit="${esc(q.id)}">Edit</button>` : ''}</div></li>`).join('')}</ol></section>`}
+        ${reviewBox(p, qs)}
         ${mineP ? `<section class="panel" id="bshare"><h2>Sharing</h2><p class="muted small">Loading…</p></section>` : isNg(p) ? ngBox(p) : `<section class="panel slim"><div class="row"><span class="muted small">Shared with you. You can make practice from it, but only the person who added it can change it.</span><button class="btn ghost sm" id="bleave">Remove from my bank</button></div></section>`}</div>`));
-      wireReview(p); if (isNg(p)) wireDelete(p);
+      wireReview(p); if (isNg(p)) wireDelete(p); if (checking(p)) wireCheck(p, qs, ansOf);
 
       // ----- make practice -----
       const form = document.getElementById('bform');
@@ -382,19 +396,59 @@
         <p class="muted small">Families with ${TR[p.track || 'gcse']} switched on can make practice from it. ${admin() ? 'Only you can delete it.' : 'Only the site owner can delete it.'}</p>
         ${admin() ? '<div class="row"><button type="button" class="btn ghost sm" id="bdel">Delete from the Ninegrade bank</button></div>' : ''}<div id="bs-msg"></div></section>`;
     }
-    function reviewBox(p) {
+    // ----- check question by question (owner and bank managers, before a paper goes in the Ninegrade bank) -----
+    const checking = (p) => staff() && ((p.collection !== 'ninegrade' && p.review === 'offered') || (p.collection === 'ninegrade' && ['pending', 'changes'].includes(p.review)));
+    function checkPanel(p, qs, ansOf) {
+      const done = qs.filter((q) => q.check_state).length; const pct = qs.length ? Math.round(done / qs.length * 100) : 0;
+      const order = [...qs].sort((a, b) => ((a.check_state ? 2 : a.flag || !ansOf(a) || /^\(added by Ninegrade\)/i.test(ansOf(a)) ? 0 : 1) - (b.check_state ? 2 : b.flag || !ansOf(b) || /^\(added by Ninegrade\)/i.test(ansOf(b)) ? 0 : 1)) || a.position - b.position);
+      const files = [...(p.q_files || []).map((f, i) => [f, `Question page ${i + 1}`]), ...(p.a_files || []).map((f, i) => [f, `Answer page ${i + 1}`])];
+      const flagOf = (q) => q.flag || (!ansOf(q) ? 'No answer uploaded' : /^\(added by Ninegrade\)/i.test(ansOf(q)) ? 'Answer added by Ninegrade, not in the upload' : '');
+      const row = (q) => { const a = ansOf(q); const f = flagOf(q);
+        return `<li class="ck-row ${q.check_state ? 'ck-' + q.check_state : f ? 'ck-flag' : ''}" data-ck="${esc(q.id)}">
+          <div class="ck-q"><div class="bq-top"><b>Q${esc(q.num)}</b><span class="muted small">${q.marks} mark${q.marks === 1 ? '' : 's'}</span>${q.topic ? `<span class="tag">${esc(q.topic)}</span>` : ''}</div>
+            ${f && !q.check_state ? `<p class="ck-warn">⚠ ${esc(f)}</p>` : ''}<div class="bq-text">${esc(q.question).replace(/\n/g, '<br>')}</div></div>
+          <div class="ck-a"><span class="ck-lab">Answer</span><div>${a ? esc(a).replace(/\n/g, '<br>') : '<span class="muted">None</span>'}</div></div>
+          <div class="ck-act">${q.check_state ? `<span class="pill ${q.check_state === 'ok' ? 'done' : 'sent'}">${q.check_state === 'ok' ? '✔ Looks correct' : '✎ Corrected'}</span><button type="button" class="linkish small" data-ck-undo="${esc(q.id)}">Undo</button>`
+            : `<span class="ck-lab">Looks correct?</span><div class="row"><button type="button" class="btn primary sm" data-ck-yes="${esc(q.id)}">Yes</button><button type="button" class="btn ghost sm" data-ck-no="${esc(q.id)}">No</button></div>`}</div>
+          <form class="ck-fix form" data-ck-form="${esc(q.id)}" hidden><label>Correct answer <small>from the uploaded paper</small><textarea rows="3" maxlength="5000" class="ck-ans">${esc(a)}</textarea></label>
+            <details><summary class="small">The question or marks are wrong too</summary><label>Question<textarea rows="3" maxlength="5000" class="ck-qt">${esc(q.question)}</textarea></label><label class="narrow-field">Marks<input type="number" min="0" max="50" class="ck-mk" value="${q.marks}"></label></details>
+            <div class="row"><button class="btn primary sm">Save the correction</button><button type="button" class="btn ghost sm" data-ck-cancel="${esc(q.id)}">Cancel</button></div><div class="ck-msg"></div></form></li>`; };
+      return `<section class="panel" id="bcheck"><div class="panel-head"><div><h2>Check question by question</h2><p class="muted small">Read each question against its answer and the uploaded paper. Press Yes if it's right. Press No to type the correct answer. Questions that need a closer look are at the top.</p></div><span class="ck-count"><b>${done}</b> of ${qs.length} checked</span></div>
+        <div class="meter ck-meter" role="img" aria-label="${done} of ${qs.length} checked"><span style="width:${pct}%"></span></div>
+        ${files.length || p.q_text || p.a_text ? `<div class="ck-files"><span class="ck-lab">The upload</span>${files.map(([f, t]) => `<button type="button" class="btn ghost xs" data-ck-file="${esc(f)}">${t} ↗</button>`).join('')}${p.q_text ? '<details><summary class="small">Pasted questions</summary><pre class="ck-pre">' + esc(p.q_text) + '</pre></details>' : ''}${p.a_text ? '<details><summary class="small">Pasted answers</summary><pre class="ck-pre">' + esc(p.a_text) + '</pre></details>' : ''}</div>` : '<p class="muted small">The uploaded files have been removed; the saved text is below.</p>'}
+        <ol class="ck-list">${order.map(row).join('')}</ol><div id="ck-log"></div></section>`;
+    }
+    function wireCheck(p, qs, ansOf) {
+      const keep = async () => { const y = window.scrollY; await paperPage(p.id); window.scrollTo(0, y); };
+      const go = async (b, fn) => { b.disabled = true; try { await fn(); await keep(); } catch (x) { b.disabled = false; const li = b.closest('li'); const m = li && li.querySelector('.ck-msg'); if (m) { m.innerHTML = `<p class="msg err">${esc(nice(x))}</p>`; } else document.getElementById('rv-msg').innerHTML = `<p class="msg err">${esc(nice(x))}</p>`; } };
+      app.querySelectorAll('[data-ck-yes]').forEach((b) => { b.onclick = () => go(b, () => api.check(b.dataset.ckYes, true)); });
+      app.querySelectorAll('[data-ck-undo]').forEach((b) => { b.onclick = () => go(b, () => api.check(b.dataset.ckUndo, null)); });
+      app.querySelectorAll('[data-ck-no]').forEach((b) => { b.onclick = () => { const f = app.querySelector(`[data-ck-form="${b.dataset.ckNo}"]`); f.hidden = false; b.closest('.ck-act').hidden = true; f.querySelector('.ck-ans').focus(); }; });
+      app.querySelectorAll('[data-ck-cancel]').forEach((b) => { b.onclick = () => { const f = app.querySelector(`[data-ck-form="${b.dataset.ckCancel}"]`); f.hidden = true; f.closest('li').querySelector('.ck-act').hidden = false; }; });
+      app.querySelectorAll('[data-ck-form]').forEach((f) => { f.onsubmit = (e) => { e.preventDefault(); const q = qs.find((x) => x.id === f.dataset.ckForm);
+        const mk = Number(f.querySelector('.ck-mk').value); go(f.querySelector('button'), () => api.check(q.id, false, f.querySelector('.ck-ans').value, f.querySelector('.ck-qt').value, Number.isFinite(mk) ? mk : null)); }; });
+      app.querySelectorAll('[data-ck-file]').forEach((b) => { b.onclick = async () => { const w = window.open('', '_blank'); const u = await api.fileUrl(b.dataset.ckFile); if (u && w) w.location = u; else { if (w) w.close(); b.textContent = 'Not available'; } }; });
+      api.corrections(p.id).then((cs) => { const el = document.getElementById('ck-log'); if (!el || !cs.length) return;
+        const qn = (id) => (qs.find((q) => q.id === id) || {}).num || '?'; const F = { answer: 'answer', question: 'question', marks: 'marks' };
+        el.innerHTML = `<details class="ck-corr"><summary class="small">Corrections made (${cs.length})</summary><ul class="log-list">${cs.map((c) => `<li><span class="muted small">${new Date(c.created_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span> <b>${nm(c.done_by)}</b> changed Q${esc(qn(c.question_id))} ${F[c.field]}: <s>${esc(c.old_value || '(empty)')}</s> → ${esc(c.new_value)}</li>`).join('')}</ul></details>`; });
+    }
+    function reviewBox(p, qs) {
       const waiting = (p.collection !== 'ninegrade' && p.review === 'offered' && staff()) || (p.collection === 'ninegrade' && ['pending', 'changes', 'declined'].includes(p.review) && admin());
       if (!waiting) return '';
       const ownerOnly = ['exam_board', 'publisher'].includes(p.origin) && !admin();
+      const left = (qs || []).filter((q) => !q.check_state).length;
       return `<section class="panel review-box"><h2>${p.collection === 'ninegrade' ? 'Approve this Ninegrade paper?' : `Offered to the Ninegrade bank by ${nm(p.owner_id)}`}</h2>
         <p class="small">${esc(ORIGIN[p.origin] || '')}${p.permission_confirmed && p.collection !== 'ninegrade' ? ' · they confirmed they wrote it or have permission, and that Ninegrade may keep and share it' : ''}${p.review_note && p.review === 'offered' ? ` · “${esc(p.review_note)}”` : ''}</p>
         ${['exam_board', 'publisher'].includes(p.origin) ? '<p class="msg info small">From an exam board or publisher: only approve it if Ninegrade has written permission from whoever owns it.</p>' : ''}
-        <p class="muted small">Check the questions and answers below. If you approve it, it becomes Ninegrade's and every family with ${TR[p.track || 'gcse']} can use it.</p>
-        <label for="rv-note">Note to them <small>optional, shown if you ask for changes or turn it down</small><input id="rv-note" maxlength="300"></label>
-        <div class="row">${ownerOnly ? '<span class="muted small">Only the site owner can approve exam board or publisher papers.</span>' : '<button class="btn primary sm" data-rv="approve">Approve</button>'}<button class="btn ghost sm" data-rv="changes">Ask for changes</button><button class="btn ghost sm" data-rv="decline">Turn down</button></div><div id="rv-msg"></div></section>`;
+        <p class="muted small">Check every question above. If you approve it, it becomes Ninegrade's and every family with ${TR[p.track || 'gcse']} can use it.</p>
+        <label for="rv-note">Reason <small>needed if you ask for changes or turn it down; they see it</small><input id="rv-note" maxlength="300"></label>
+        ${left ? `<p class="small ck-left">Check all questions before approving: <b>${left}</b> still to check.</p>` : ''}
+        <div class="row">${ownerOnly ? '<span class="muted small">Only the site owner can approve exam board or publisher papers.</span>' : `<button class="btn primary sm" data-rv="approve" ${left ? 'disabled' : ''}>Approve</button>`}<button class="btn ghost sm" data-rv="changes">Ask for changes</button><button class="btn ghost sm" data-rv="decline">Turn down</button></div><div id="rv-msg"></div></section>`;
     }
     function wireReview(p) {
-      app.querySelectorAll('[data-rv]').forEach((b) => { b.onclick = async () => { b.disabled = true;
+      app.querySelectorAll('[data-rv]').forEach((b) => { b.onclick = async () => {
+        if (b.dataset.rv !== 'approve' && !((document.getElementById('rv-note') || {}).value || '').trim()) { document.getElementById('rv-msg').innerHTML = '<p class="msg err">Add a short reason, so they know what to change.</p>'; document.getElementById('rv-note').focus(); return; }
+        b.disabled = true;
         try { await api.review(p.id, b.dataset.rv, (document.getElementById('rv-note') || {}).value || ''); await refreshCounts(); paperPage(p.id); }
         catch (x) { b.disabled = false; document.getElementById('rv-msg').innerHTML = `<p class="msg err">${esc(nice(x))}</p>`; } }; });
       const rs = document.getElementById('bresub');
