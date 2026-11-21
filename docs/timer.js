@@ -19,7 +19,7 @@
     if (style === 'corner') document.body.appendChild(el); else where.before(el);
     const draw = () => { const u = used(); const over = total && u > total;
       const clk = el.querySelector('.ngt-clk'); const sub = el.querySelector('.ngt-sub'); const pct = total ? Math.min(100, u / total * 100) : 0;
-      if (style === 'exam' && total) { clk.textContent = over ? '0:00' : fmt(total - u); el.querySelector('.ngt-lab').textContent = over ? `Time's up. Finish the question you're on and send.` : `left of ${minutes} minutes`; }
+      if (style === 'exam' && total) { clk.textContent = over ? '+' + fmt(u - total) : fmt(total - u); el.querySelector('.ngt-lab').textContent = over ? `Time's up. You can carry on: the extra time is shown to your parent or teacher.` : `left of ${minutes} minutes`; }
       else { clk.textContent = fmt(u); if (sub) sub.textContent = total ? (over ? `Over the ${minutes} min` : `of ${minutes} min`) : 'time on this quiz'; if (style === 'exam') el.querySelector('.ngt-lab').textContent = 'time so far'; }
       el.classList.toggle('over', !!over); el.classList.toggle('paused', !running);
       const ring = el.querySelector('.ngt-ring'); if (ring) ring.style.setProperty('--p', (total ? pct : (u / 1000 % 60) / 60 * 100) + '%');
