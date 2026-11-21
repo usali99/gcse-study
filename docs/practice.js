@@ -14,7 +14,7 @@
   const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const SQL_HINT = 'Practice sets need a quick database update first. Ask the site owner to run v2-practice.sql.';
 
-  const TIMER_STYLE = { quiz: 'corner', mock: 'exam' }; // Usman to confirm (designs A bar / B corner / C exam)
+  const TIMER_STYLE = { quiz: 'corner', mock: 'exam' }; // Usman chose 21 Nov 2026: corner clock for quizzes, exam countdown for mocks
   window.createPractice = function (ctx) {
     const { esc, fmt, shell, page, app } = ctx;
     const me = () => ctx.me(); const D = () => ctx.D();
