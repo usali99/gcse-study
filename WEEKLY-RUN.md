@@ -30,8 +30,10 @@ Download any photos (`files` on a submission) with `node tools/db.mjs download <
 
 For each submission with `mark` = null: mark it against the lesson's answer sheet
 (`lessons/week-NN/*-answers.md`), using the official mark-scheme style (method marks, 1 mark per point).
-Photos named `rough-paper-N.png` are the student's working from the site's Rough paper window (same for practice
-attempts): use them for method marks, and say in the feedback what the working shows.
+Photos named `rough-paper-Q<number>.png` (e.g. `rough-paper-Q2a.png`, a second page `rough-paper-Q2a-2.png`) are the
+student's working for that question from the site's Rough paper window (same for practice attempts); the question
+number is also printed across the top of the picture. Use them for method marks on that question, and say in the
+feedback what the working shows.
 Write short, encouraging feedback for Hadi: what went well and one thing to fix. 
 **Several sends for one lesson** (Hadi can press "Send again" to fix or add to an answer): mark all unmarked
 submissions for the same lesson together as ONE piece of work, where a later answer to the same question replaces the

@@ -125,8 +125,11 @@ test('Rough paper: draw, undo, type, and add the page to the photos', async ({ p
   await page.click('#rough [data-tool=type]');
   await page.fill('.rough-text', '15% of 300 = 45');
   await page.click('.rough-add');
+  await expect(page.locator('.rough-add')).toHaveText('Type the question number');
+  await page.fill('.rough-qn', 'Q1');
+  await page.click('.rough-add');
   await expect(page.locator('.rough-add')).toHaveText('✔ Added');
-  expect(await page.locator('#photos').evaluate((i) => [...i.files].map((f) => f.name))).toEqual(['rough-paper-1.png']);
+  expect(await page.locator('#photos').evaluate((i) => [...i.files].map((f) => f.name))).toEqual(['rough-paper-Q1.png']);
   await expect(page.locator('.fc')).toHaveCount(1);
   await page.click('#rough .memo-x');
   await page.click('.fc-see'); // open it to check before sending

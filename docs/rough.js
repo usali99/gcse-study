@@ -35,7 +35,7 @@
         <span class="rough-group"><select class="rough-paper" aria-label="Paper"><option value="grid">Squared</option><option value="lines">Lined</option><option value="plain">Plain</option></select>
           <button type="button" class="rough-tool" data-act="undo">Undo</button><button type="button" class="rough-tool" data-act="clear">Clear</button></span></div>
       <div class="rough-area paper-grid"><canvas></canvas><textarea class="rough-text" hidden placeholder="Type your working out…" spellcheck="false"></textarea></div>
-      <div class="memo-foot"><span class="muted small">${photos ? 'Not saved unless you add it.' : 'Nothing is saved.'}</span>${photos ? '<button type="button" class="btn primary xs rough-add">Add to my answers</button>' : ''}</div>`;
+      <div class="memo-foot"><span class="muted small">${photos ? 'Not saved unless you add it.' : 'Nothing is saved.'}</span>${photos ? '<span class="rough-addbox"><label class="rough-q">Question<input class="rough-qn" maxlength="8" placeholder="e.g. 2a" autocomplete="off"></label><button type="button" class="btn primary xs rough-add">Add to my answers</button></span>' : ''}</div>`;
     document.body.appendChild(w);
     const area = w.querySelector('.rough-area'); const cv = w.querySelector('canvas'); const ctx = cv.getContext('2d'); const txt = w.querySelector('.rough-text');
     let strokes = []; let cur = null; let col = 'ink'; let tool = 'pen';
@@ -61,12 +61,16 @@
     const add = w.querySelector('.rough-add');
     if (add) add.onclick = () => {
       if (!strokes.length && !txt.value.trim()) { add.textContent = 'Nothing to add yet'; setTimeout(() => { add.textContent = 'Add to my answers'; }, 1500); return; }
-      const r = area.getBoundingClientRect(); const out = document.createElement('canvas'); out.width = cv.width; out.height = cv.height; const o = out.getContext('2d'); const d = cv.width / r.width;
-      o.fillStyle = '#fff'; o.fillRect(0, 0, out.width, out.height); o.strokeStyle = '#d6dbe6'; o.lineWidth = 1;
+      const qEl = w.querySelector('.rough-qn'); const qn = qEl.value.trim().replace(/^q(uestion)?\s*/i, '').replace(/[^\w.()-]/g, '');
+      if (!qn) { qEl.classList.add('need'); qEl.focus(); add.textContent = 'Type the question number'; setTimeout(() => { add.textContent = 'Add to my answers'; }, 2000); return; }
+      qEl.classList.remove('need'); const band = 30;
+      const r = area.getBoundingClientRect(); const d = cv.width / r.width; const out = document.createElement('canvas'); out.width = cv.width; out.height = cv.height + band * d; const o = out.getContext('2d');
+      o.fillStyle = '#fff'; o.fillRect(0, 0, out.width, out.height); o.fillStyle = '#f2b33d'; o.fillRect(0, 0, out.width, band * d); o.fillStyle = '#1d2240'; o.font = `bold ${15 * d}px system-ui, sans-serif`; o.fillText(`Rough working for Question ${qn}`, 10 * d, 20 * d);
+      o.translate(0, band * d); o.strokeStyle = '#d6dbe6'; o.lineWidth = 1;
       if (paper.value !== 'plain') { for (let y = 24 * d; y < out.height; y += 24 * d) { o.beginPath(); o.moveTo(0, y); o.lineTo(out.width, y); o.stroke(); } if (paper.value === 'grid') for (let x = 24 * d; x < out.width; x += 24 * d) { o.beginPath(); o.moveTo(x, 0); o.lineTo(x, out.height); o.stroke(); } }
       o.drawImage(cv, 0, 0);
       if (txt.value.trim()) { o.fillStyle = COLS.ink; o.font = `${16 * d}px system-ui, sans-serif`; txt.value.split('\n').forEach((l, i) => o.fillText(l, 10 * d, (24 * (i + 1) - 6) * d)); }
-      out.toBlob((b) => { if (!b) return; const n = (photos.files ? photos.files.length : 0) + 1; const f = new File([b], `rough-paper-${n}.png`, { type: 'image/png' });
+      out.toBlob((b) => { if (!b) return; const taken = [...(photos.files || [])].map((x) => x.name); let nm = `rough-paper-Q${qn}.png`; for (let k = 2; taken.includes(nm); k++) nm = `rough-paper-Q${qn}-${k}.png`; const f = new File([b], nm, { type: 'image/png' });
         try { const dt = new DataTransfer(); [...(photos.files || [])].forEach((x) => dt.items.add(x)); dt.items.add(f); photos.files = dt.files; photos.dispatchEvent(new Event('change', { bubbles: true }));
           add.textContent = '✔ Added'; setTimeout(() => { add.textContent = 'Add to my answers'; }, 2000); }
         catch (x) { add.textContent = 'Couldn’t add it on this device'; } }, 'image/png');
