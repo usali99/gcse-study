@@ -14,6 +14,7 @@
   const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const SQL_HINT = 'Practice sets need a quick database update first. Ask the site owner to run v2-practice.sql.';
 
+  const TIMER_STYLE = { quiz: 'corner', mock: 'exam' }; // Usman to confirm (designs A bar / B corner / C exam)
   window.createPractice = function (ctx) {
     const { esc, fmt, shell, page, app } = ctx;
     const me = () => ctx.me(); const D = () => ctx.D();
@@ -260,7 +261,7 @@
     const quizKey = (q) => q.map((x) => (x.type === 'mc' ? x.options[x.answer] : x.type === 'num' ? x.answer : (x.accept || [])[0]));
     function attemptHtml(a, s, staff) {
       const who = staff ? first(ctx.person(a.student_id)) : 'You';
-      return `<div class="sub"><div class="panel-head"><span class="muted small">${esc(who)} sent this ${when(a.created_at)}${a.minutes_taken != null ? ` · took ${a.minutes_taken} min` : ''}</span>
+      return `<div class="sub"><div class="panel-head"><span class="muted small">${esc(who)} sent this ${when(a.created_at)}${a.minutes_taken != null ? ` · took ${a.minutes_taken} min${s.minutes && ['mock', 'quiz'].includes(s.kind) ? ` of ${s.minutes}` : ''}` : ''}${a.away_count ? ` · left the page ${a.away_count === 1 ? 'once' : a.away_count + ' times'} (${a.away_seconds < 60 ? a.away_seconds + ' sec' : Math.round(a.away_seconds / 60) + ' min'} away, not counted)` : a.away_count === 0 ? ' · stayed on the page' : ''}</span>
         ${a.mark != null ? `<span class="pill done">${a.mark} / ${a.mark_max}</span>` : a.quiz_max && s.kind === 'quiz' ? `<span class="pill done">${a.quiz_score} / ${a.quiz_max}</span>` : '<span class="pill sent">Waiting for marking</span>'}</div>
         ${a.quiz_max ? `<p class="small">Quick questions: <b>${a.quiz_score} / ${a.quiz_max}</b>${(s.quiz || []).length ? ` · ${(a.quiz_answers || []).map((x, i) => `${i + 1}${x.right ? '✓' : '✗'}`).join(' ')}` : ''}</p>` : ''}
         ${a.answer_text ? `<b class="small">${staff ? `${esc(who)}'s answer` : 'Your answer'}</b><div class="answer-text">${esc(a.answer_text)}</div>` : ''}
@@ -326,25 +327,26 @@
         return;
       }
       // ----- student doing the set -----
-      const quiz = s.quiz || []; const written = s.kind !== 'quiz';
+      const quiz = s.quiz || []; const written = s.kind !== 'quiz'; const timed = ['mock', 'quiz'].includes(s.kind) && !staff;
       const dk = `ng-pdraft:${me().id}:${s.id}`; let draft = null; try { draft = JSON.parse(localStorage.getItem(dk)); } catch (e) { draft = null; }
       shell('practice', page(`<div class="narrow">${head}
         ${staff ? `<section class="panel slim"><div class="row"><a class="btn ghost sm" href="#plike-${esc(s.id)}">Make another like this</a><button class="btn ghost sm" data-pown="draft">Take it back</button><button class="btn ghost sm" data-pown="archived">Archive</button></div></section>` : ''}
         <article class="panel lesson" id="plesson-body">${s.body_html || ''}${s.kind === 'lesson' ? '<p class="memo-open-row"><button type="button" class="btn ghost sm" id="memo-open">✍ Write it from memory</button> <span class="muted small">Cover the notes and write what you remember. Nothing is saved.</span></p>' : ''}</article>
         <section class="panel" id="psend"><div class="panel-head"><h2>${atts.length ? 'Have another go' : 'Your answers'}</h2><button type="button" class="btn ghost sm" id="rough-open">✏️ Rough paper</button></div>
-          ${s.minutes && s.kind === 'mock' ? `<p class="msg info">Mock exam: give yourself ${s.minutes} minutes. The timer started when you opened this page.</p>` : ''}
+          ${timed && TIMER_STYLE[s.kind] !== 'exam' ? `<p class="muted small">${s.kind === 'mock' ? 'Mock exam' : 'Quiz'} timer: it counts while this page is open and pauses if you switch tab or window or leave the page. Your parent or teacher sees the time you took.</p>` : ''}
           <form id="pwork" class="form">${quiz.length ? quizHtml(quiz) : ''}
             ${written ? `<label for="pw-ans">Your written answers <small>number each answer, e.g. 1. …</small><textarea id="pw-ans" rows="10" maxlength="20000"></textarea></label>
             <label for="pw-photos">Photos of your written work <small>optional</small><input id="pw-photos" type="file" accept="image/*,application/pdf" multiple></label>` : ''}
-            <label for="pw-min" class="narrow-field">Minutes taken<input id="pw-min" type="number" min="0" max="600"></label>
+            ${timed ? '' : '<label for="pw-min" class="narrow-field">Minutes taken<input id="pw-min" type="number" min="0" max="600"></label>'}
             <div id="pw-msg"></div><button class="btn primary lg" id="pw-go">${quiz.length && !written ? 'Check my answers' : 'Send'}</button></form></section>
         ${atts.length ? `<section class="panel"><h2>Your tries</h2>${atts.map((a) => attemptHtml(a, s, false)).join('')}</section>` : ''}</div>`));
       if (window.ngRough) window.ngRough(document.getElementById('rough-open'), document.getElementById('pw-photos'));
       if (s.kind === 'lesson' && window.ngMemoPad) window.ngMemoPad(document.getElementById('plesson-body'), document.getElementById('memo-open'), document.getElementById('pw-ans'));
       app.querySelectorAll('[data-pown]').forEach((b) => { b.onclick = async () => { try { await api.update(s.id, { status: b.dataset.pown }); location.hash = '#practice'; } catch (x) { alert(nice(x)); } }; });
-      const started = Date.now(); const minEl = document.getElementById('pw-min');
-      const tick = setInterval(() => { if (!document.body.contains(minEl)) return clearInterval(tick); if (!minEl.dataset.touched) minEl.value = Math.max(1, Math.round((Date.now() - started) / 6e4)); }, 15000);
-      minEl.oninput = () => { minEl.dataset.touched = 1; };
+      const started = Date.now(); const minEl = document.getElementById('pw-min') || { value: '', dataset: {} };
+      const timer = timed && window.ngTimer ? window.ngTimer({ key: `${me().id}:${s.id}`, minutes: s.minutes || 0, style: TIMER_STYLE[s.kind], where: document.getElementById('psend').closest('.narrow').querySelector('article') }) : null;
+      if (!timer) { const tick = setInterval(() => { if (!document.body.contains(app) || !minEl.isConnected) return clearInterval(tick); if (!minEl.dataset.touched) minEl.value = Math.max(1, Math.round((Date.now() - started) / 6e4)); }, 15000);
+        minEl.oninput = () => { minEl.dataset.touched = 1; }; }
       const ans = document.getElementById('pw-ans');
       const tpl = ans ? answerTemplate(app.querySelector('article.lesson')) : '';
       if (ans && tpl) ans.value = tpl;
@@ -358,7 +360,8 @@
         if (!written && r && !r.answers.some((x) => x.given !== null && x.given !== '')) { msg.innerHTML = '<p class="msg err">Answer at least one question first.</p>'; return; }
         b.disabled = true; b.textContent = 'Sending…';
         try {
-          await api.addAttempt({ set_id: s.id, answer_text: text, quiz_answers: r ? r.answers : [], quiz_score: r ? r.score : null, quiz_max: r ? r.max : null, minutes_taken: minEl.value ? Number(minEl.value) : Math.max(1, Math.round((Date.now() - started) / 6e4)) }, files);
+          await api.addAttempt({ set_id: s.id, answer_text: text, quiz_answers: r ? r.answers : [], quiz_score: r ? r.score : null, quiz_max: r ? r.max : null, ...(timer ? (({ minutes, ...rest }) => ({ minutes_taken: minutes, ...rest }))(timer.result()) : { minutes_taken: minEl.value ? Number(minEl.value) : Math.max(1, Math.round((Date.now() - started) / 6e4)) }) }, files);
+          if (timer) timer.finish();
           try { localStorage.removeItem(dk); } catch (x) { /* blocked */ }
           await refreshCounts();
           msg.innerHTML = `<p class="msg ok">${r && !written ? `You got ${r.score} out of ${r.max}. The right answers are shown above. <button type="button" class="btn ghost sm" id="pw-again">Try again</button>` : 'Sent. It will be marked at the evening run. You can have another go any time.'}</p>`;

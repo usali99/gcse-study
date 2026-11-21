@@ -214,3 +214,23 @@ test('practice lessons have Write it from memory; quizzes and other sets do not'
   await expect(page.locator('#memo')).toBeHidden();
   await expect(page.locator('.learn-zone')).not.toHaveClass(/covered/);
 });
+
+test('quiz timer: corner clock, pauses when the page is hidden, and the time is saved with the try', async ({ page }) => {
+  await signIn(page, 'hadi');
+  await go(page, '#pset-ps1');
+  await expect(page.locator('.ngt-corner')).toBeVisible();
+  await expect(page.locator('#pw-min')).toHaveCount(0);
+  // switch tab, then come back
+  await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange')); });
+  await expect(page.locator('.ngt-corner')).toHaveClass(/paused/);
+  await page.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => false }); document.dispatchEvent(new Event('visibilitychange')); });
+  await expect(page.locator('.ngt-corner')).not.toHaveClass(/paused/);
+  await page.fill('#pq0', '9');
+  await page.click('#pw-go');
+  await expect(page.locator('#pw-msg')).toContainText('You got');
+  const a = await page.evaluate(() => JSON.parse(localStorage.getItem('gcse-v2-practice-demo')).attempts[0]);
+  expect(a.away_count).toBe(1);
+  expect(a.minutes_taken).toBe(1);
+  await page.click('#pw-again');
+  await expect(page.locator('.sub').first()).toContainText('left the page once');
+});
