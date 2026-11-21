@@ -196,3 +196,21 @@ test('the answer box is pre-filled with the set\'s numbered questions, and an un
   await page.click('#pw-go');
   await expect(page.locator('#pw-msg')).toContainText('Sent');
 });
+
+test('practice lessons have Write it from memory; quizzes and other sets do not', async ({ page }) => {
+  await signIn(page, 'hadi');
+  await go(page, '#pset-ps1');
+  await expect(page.locator('#memo-open')).toHaveCount(0);
+  await page.evaluate(() => { const k = 'gcse-v2-practice-demo'; const s = JSON.parse(localStorage.getItem(k)) || { sets: [], answers: {}, attempts: [] };
+    s.sets.unshift({ id: 'pl', student_id: 'hadi', created_by: 'usman', subject: 'Physics', kind: 'lesson', title: 'States of matter', source_text: '', source_files: [], note: '', status: 'assigned', quiz: [], reply: '',
+      body_html: '<h2>1. Learn it</h2><p>A solid keeps its shape.</p><h2>2. Your turn</h2><p><strong>1.</strong> Describe a solid.</p>', created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+    localStorage.setItem(k, JSON.stringify(s)); });
+  await page.reload();
+  await go(page, '#pset-pl');
+  await page.click('#memo-open');
+  await expect(page.locator('.learn-zone')).toHaveClass(/covered/);
+  await page.fill('.memo-text', 'A solid keeps');
+  await page.click('#pw-ans');
+  await expect(page.locator('#memo')).toBeHidden();
+  await expect(page.locator('.learn-zone')).not.toHaveClass(/covered/);
+});

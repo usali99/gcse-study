@@ -330,7 +330,7 @@
       const dk = `ng-pdraft:${me().id}:${s.id}`; let draft = null; try { draft = JSON.parse(localStorage.getItem(dk)); } catch (e) { draft = null; }
       shell('practice', page(`<div class="narrow">${head}
         ${staff ? `<section class="panel slim"><div class="row"><a class="btn ghost sm" href="#plike-${esc(s.id)}">Make another like this</a><button class="btn ghost sm" data-pown="draft">Take it back</button><button class="btn ghost sm" data-pown="archived">Archive</button></div></section>` : ''}
-        <article class="panel lesson">${s.body_html || ''}</article>
+        <article class="panel lesson" id="plesson-body">${s.body_html || ''}${s.kind === 'lesson' ? '<p class="memo-open-row"><button type="button" class="btn ghost sm" id="memo-open">✍ Write it from memory</button> <span class="muted small">Cover the notes and write what you remember. Nothing is saved.</span></p>' : ''}</article>
         <section class="panel" id="psend"><h2>${atts.length ? 'Have another go' : 'Your answers'}</h2>
           ${s.minutes && s.kind === 'mock' ? `<p class="msg info">Mock exam: give yourself ${s.minutes} minutes. The timer started when you opened this page.</p>` : ''}
           <form id="pwork" class="form">${quiz.length ? quizHtml(quiz) : ''}
@@ -339,6 +339,7 @@
             <label for="pw-min" class="narrow-field">Minutes taken<input id="pw-min" type="number" min="0" max="600"></label>
             <div id="pw-msg"></div><button class="btn primary lg" id="pw-go">${quiz.length && !written ? 'Check my answers' : 'Send'}</button></form></section>
         ${atts.length ? `<section class="panel"><h2>Your tries</h2>${atts.map((a) => attemptHtml(a, s, false)).join('')}</section>` : ''}</div>`));
+      if (s.kind === 'lesson' && window.ngMemoPad) window.ngMemoPad(document.getElementById('plesson-body'), document.getElementById('memo-open'), document.getElementById('pw-ans'));
       app.querySelectorAll('[data-pown]').forEach((b) => { b.onclick = async () => { try { await api.update(s.id, { status: b.dataset.pown }); location.hash = '#practice'; } catch (x) { alert(nice(x)); } }; });
       const started = Date.now(); const minEl = document.getElementById('pw-min');
       const tick = setInterval(() => { if (!document.body.contains(minEl)) return clearInterval(tick); if (!minEl.dataset.touched) minEl.value = Math.max(1, Math.round((Date.now() - started) / 6e4)); }, 15000);

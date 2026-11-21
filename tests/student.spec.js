@@ -107,5 +107,11 @@ test('Write it from memory: covers the Learn it notes, counts words, nothing kep
   await expect(page.locator('.learn-zone')).not.toHaveClass(/covered/);
   await page.click('.memo-inline');
   await expect(page.locator('.memo-text')).toHaveValue('');
+  // clicking into the real answer box clears and closes it
+  await page.fill('.memo-text', 'something to copy');
+  await page.click('#answer');
+  await expect(page.locator('#memo')).toBeHidden();
+  await page.click('#memo-open');
+  await expect(page.locator('.memo-text')).toHaveValue('');
   await noSideScroll(page);
 });
